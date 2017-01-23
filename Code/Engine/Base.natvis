@@ -1,0 +1,60 @@
+<?xml version="1.0" encoding="utf-8"?>
+<AutoVisualizer xmlns="http://schemas.microsoft.com/vstudio/debugger/natvis/2010">
+
+  <Type Name="Reax::StringBuffer&lt;*&gt;">
+    <DisplayString>{str}</DisplayString>
+    <StringView>str</StringView>
+    <Expand>
+      <Item Name="[length]" ExcludeView="simple">length</Item>
+      <Item Name="[capacity]" ExcludeView="simple">capacity</Item>
+      <Item Name="[refs]" ExcludeView="simple">refs</Item>
+      <ArrayItems>
+        <Size>length</Size>
+        <ValuePointer>str</ValuePointer>
+      </ArrayItems>
+    </Expand>
+  </Type>
+
+  <Type Name="Reax::StringBuffer&lt;char&gt;">
+    <DisplayString>{str,na}</DisplayString>
+    <StringView>str,na</StringView>
+    <Expand>
+      <Item Name="[length]" ExcludeView="simple">length</Item>
+      <Item Name="[capacity]" ExcludeView="simple">capacity</Item>
+      <Item Name="[refs]" ExcludeView="simple">refs</Item>
+      <ArrayItems>
+        <Size>length</Size>
+        <ValuePointer>str</ValuePointer>
+      </ArrayItems>
+    </Expand>
+  </Type>
+
+  <Type Name="Reax::StringBuffer&lt;wchar_t&gt;">
+    <DisplayString>{str,su}</DisplayString>
+    <StringView>str,su</StringView>
+    <Expand>
+      <Item Name="[length]" ExcludeView="simple">length</Item>
+      <Item Name="[capacity]" ExcludeView="simple">capacity</Item>
+      <Item Name="[refs]" ExcludeView="simple">refs</Item>
+      <ArrayItems>
+        <Size>length</Size>
+        <ValuePointer>str</ValuePointer>
+      </ArrayItems>
+    </Expand>
+  </Type>
+
+  <Type Name="Reax::String;">
+    <DisplayString>{m_buffer->str,na}</DisplayString>
+    <StringView>m_buffer->str,na</StringView>
+    <Expand>
+      <Item Name="[length]" ExcludeView="simple">m_buffer->length</Item>
+      <Item Name="[capacity]" ExcludeView="simple">m_buffer->capacity</Item>
+      <Item Name="[refs]" ExcludeView="simple">m_buffer->refs</Item>
+      <Item Name="[str]" ExcludeView="simple">m_buffer->str</Item>
+      <ArrayItems IncludeView="expanded">
+        <Size>m_buffer->length</Size>
+        <ValuePointer>m_buffer->str</ValuePointer>
+      </ArrayItems>
+    </Expand>
+  </Type>
+</AutoVisualizer>
