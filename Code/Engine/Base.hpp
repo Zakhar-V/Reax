@@ -92,11 +92,24 @@
 #include <stdarg.h>
 #include <stdio.h>
 #include <time.h>
+
+#include <math.h>
+
 #include <new>
 #include <atomic>
+#include <initializer_list>
 
 namespace Reax
 {
+	// grouping
+	//!\defgroup Base Base
+	//!\{
+	//!\defgroup Container Template library
+	//!\defgroup Math Math library
+	//!\defgroup String	Strings
+	//!\defgroup Concurrency Concurrency
+	//!\}
+
 	//----------------------------------------------------------------------------//
 	// Types
 	//----------------------------------------------------------------------------//
@@ -124,8 +137,35 @@ namespace Reax
 	RX_API void Assert(const char* _type, const char* _func, const char* _file, int _line, const char* _desc, const char* _msg = nullptr, ...);
 
 	//----------------------------------------------------------------------------//
+	// NonCopyable
+	//----------------------------------------------------------------------------//
+
+	class NonCopyable
+	{
+	public:
+		NonCopyable(void) { }
+		~NonCopyable(void) { }
+
+	private:
+		NonCopyable(const NonCopyable&) = delete;
+		NonCopyable& operator = (const NonCopyable&) = delete;
+	};
+
+	//----------------------------------------------------------------------------//
+	//
+	//----------------------------------------------------------------------------//
+
+	template <class T> class Singleton
+	{
+
+	};
+
+	//----------------------------------------------------------------------------//
 	// Move semantics
 	//----------------------------------------------------------------------------//
+
+	//!\addtogroup Container 
+	//!\{
 
 	template <class T> struct BaseType { typedef T Type; };
 	template <class T> struct BaseType<T&> { typedef T Type; };
@@ -177,7 +217,7 @@ namespace Reax
 	//! Move elements to uninitialized memory and destroy old elements.
 	template <class T> T* MoveAndDestroyRange(T* _dst, T* _src, T* _end)
 	{
-		for (T* src = _src; _src < _end;)
+		for (T* src = _src; src < _end;)
 			Construct(_dst++, Move(*src++));
 		while (_src < _end)
 			Destroy(_src++);
@@ -231,7 +271,7 @@ namespace Reax
 	{
 		if (_currentSize)
 		{
-			size_t _size = _currentSize;
+			uint _size = _currentSize;
 			while (_size < _newSize)
 				_size += (_size + 1) >> 1;
 			return _size;
@@ -240,28 +280,96 @@ namespace Reax
 	}
 
 	//----------------------------------------------------------------------------//
-	// NonCopyable
+	// InitializerList
 	//----------------------------------------------------------------------------//
 
-	class NonCopyable
+	//!
+	template <class T> using InitializerList = std::initializer_list<T>;
+
+	/*template <class T> class InitializerList
 	{
 	public:
-		NonCopyable(void) { }
-		~NonCopyable(void) { }
+		//!
+		constexpr InitializerList(void) = default;
+		//!
+		constexpr InitializerList(std::initializer_list<T> _list) : m_first(_list.begin()), m_last(_list.end()) { }
+		//!
+		constexpr InitializerList(const T* _start, const T* _end) noexcept : m_first(_first), m_last(_last) { }
+		//!
+		constexpr InitializerList(const T* _start, size_t _count)  noexcept : m_first(_first), m_last(_first + _count) { }
+		//!
+		constexpr const T* Begin(void) const noexcept { return m_first; }
+		//!
+		constexpr const T* End(void) const noexcept { return m_last; }
+		//!
+		constexpr uint Size(void) const noexcept { return (uint)(m_last - m_first); }
 
 	private:
-		NonCopyable(const NonCopyable&) = delete;
-		NonCopyable& operator = (const NonCopyable&) = delete;
+		const T* m_first = nullptr;
+		const T* m_last = nullptr;
 	};
 
+	//!
+	template <class T> constexpr const T* begin(InitializerList<T> _list) noexcept { return _list.Begin(); }
+	//!
+	template <class T> constexpr const T* end(InitializerList<T> _list) noexcept { return _list.End(); }*/
+
+
 	//----------------------------------------------------------------------------//
-	//
+	// VoidType
 	//----------------------------------------------------------------------------//
 
-	template <class T> class Singleton
+	template<class...> struct _CheckParams
+	{	
+		typedef void Type;
+	};
+
+	template<class... T> using VoidType = typename _CheckParams<T...>::Type;
+
+	//----------------------------------------------------------------------------//
+	// Iterator	utilities
+	//----------------------------------------------------------------------------//
+
+	//!
+	enum class IteratorType
 	{
-
+		Array,
+		Generic,
 	};
+
+	//! Tag for random acess iterators
+	enum class ArrayIteratorTag { ID = (int)IteratorType::Array };
+	//! Tag for other iterators
+	enum class GenericIteratorTag { ID = (int)IteratorType::Generic };
+
+	//! Classify iterator type
+	template <class T, class = void> struct IteratorTag { static const auto Type = GenericIteratorTag::ID; };
+	//! Classify iterator type
+	template <class T> struct IteratorTag<T*> { static const auto Type = ArrayIteratorTag::ID; };
+
+	//!
+	template <class T> bool IsArrayIterator(void) { return IteratorTag<T>::Type == static_cast<decltype(IteratorTag<T>::Type)>(IteratorType::Array); }
+	//!
+	template <class T> bool IsGenericIterator(void) { return IteratorTag<T>::Type == static_cast<decltype(IteratorTag<T>::Type)>(IteratorType::Generic); }
+
+	//! Get distance between two array iterators. 
+	template <class T> uint _IteratorDistance(T _start, T _end, ArrayIteratorTag) { return (uint)(_end - _start); }
+	//! Get distance between two generic iterators. 
+	template <class T> uint _IteratorDistance(T _start, T _end, GenericIteratorTag)
+	{
+		uint _dist = 0;
+		while (_start != _end) ++_start, ++_dist;
+		return _dist;
+	}
+	//! Get distance between two iterators. 
+	template <class T> uint IteratorDistance(T _start, T _end) { return _IteratorDistance(_start, _end, IteratorTag<T>::Type); }
+	
+	//! Get tag for std iterator
+	template <class T> struct _StdIteratorCategory { static const GenericIteratorTag Type = GenericIteratorTag::ID; };
+	//! Get tag for std iterator
+	template <> struct _StdIteratorCategory<std::random_access_iterator_tag> { static const ArrayIteratorTag Type = ArrayIteratorTag::ID; };
+	//! Classify std iterators type
+	template <class T> struct IteratorTag<T, VoidType<typename T::iterator_category>> { static const auto Type = _StdIteratorCategory<T::iterator_category>::Type; };
 
 	//----------------------------------------------------------------------------//
 	// ArrayIterator
@@ -272,9 +380,7 @@ namespace Reax
 	{
 	public:
 		//!
-		ArrayIterator(void) { }
-		//!
-		explicit ArrayIterator(T* _ptr) : m_ptr(_ptr) { }
+		ArrayIterator(T* _ptr = nullptr) : m_ptr(_ptr) { }
 		//!	Implicit conversion from non-const iterator to const iterator.
 		operator const typename ArrayIterator<const T>(void) const { return ArrayIterator<const T>(m_ptr); }
 
@@ -325,6 +431,9 @@ namespace Reax
 		T* m_ptr = nullptr;
 	};
 
+	//!
+	template <class T> struct IteratorTag<ArrayIterator<T>> { static const auto Type = ArrayIteratorTag::ID; };
+
 	//----------------------------------------------------------------------------//
 	// Array
 	//----------------------------------------------------------------------------//
@@ -336,48 +445,54 @@ namespace Reax
 		typedef ArrayIterator<T> Iterator;
 		typedef ArrayIterator<const T> ConstIterator;
 
-		//!
+		//!	Default constructor.
 		Array(void) = default;
-		//!
+		//!	Destructor.
 		~Array(void) { Free(); }
-		//!
+		//!	Copy constructor.
 		Array(const Array& _rhs) { Push(_rhs.m_data, _rhs.m_size); }
-		//!
-		Array(Array&& _rhs) :
-			m_size(_rhs.m_size),
-			m_caps(_rhs.m_caps),
-			m_data(_rhs.m_data)
+		//! Move constructor.
+		Array(Array&& _rhs) : m_size(_rhs.m_size), m_capacity(_rhs.m_capacity), m_data(_rhs.m_data)
 		{
 			_rhs.m_size = 0;
-			_rhs.m_caps = 0;
+			_rhs.m_capacity = 0;
 			_rhs.m_data = nullptr;
 		}
-		//!
+		//! Fill constructor.
+		explicit Array(uint _size) { Resize(_size); }
+		//! Fill constructor.
+		Array(uint _size, const T& _value) { Resize(_size, _value); }
+		//! Range constructor.
+		template <class I> Array(I _start, I _end) { Push(_start, _end); }
+		//! Initializer list constructor.
+		Array(InitializerList<T> _list) { Push(_list); }
+
+		//! Copy assignment.
 		Array& operator = (const Array& _rhs)
 		{
 			if (m_data != _rhs.m_data)
 				Clear().Push(_rhs.m_data, _rhs.m_size);
 			return *this;
 		}
-		//!
+		//!	Move assignment.
 		Array& operator = (Array&& _rhs)
 		{
 			Swap(m_size, _rhs.m_size);
-			Swap(m_caps, _rhs.m_caps);
+			Swap(m_capacity, _rhs.m_capacity);
 			Swap(m_data, _rhs.m_data);
 			return *this;
 		}
-
-		TODO("More constructors");
+		//! Initializer list assignment. 
+		Array& operator = (InitializerList<T> _rhs) { return Clear().Push(_rhs); }
 
 		// [capacity]
 
 		//!	Get size of array.
 		uint Size(void) const { return m_size; }
 		//!	Get real size of array.
-		uint Capacity(void) const { return m_caps; }
+		uint Capacity(void) const { return m_capacity; }
 		//!	Get number of unused elements.
-		uint Unused(void) const { return m_caps - m_size; }
+		uint Unused(void) const { return m_capacity - m_size; }
 		//!	Is empty.
 		bool IsEmpty(void) const { return m_size == 0; }
 		//!	Non empty.
@@ -393,7 +508,7 @@ namespace Reax
 			else if (_size > m_size)
 			{
 				if (Unused() < _size)
-					_Realloc(GrowTo(m_caps, _size));
+					_Realloc(GrowTo(m_capacity, _size));
 				ConstructRange(m_data + m_size, m_data + _size);
 				m_size = _size;
 			}
@@ -410,7 +525,7 @@ namespace Reax
 			else if (_size > m_size)
 			{
 				if (Unused() < _size)
-					_Realloc(GrowTo(m_caps, _size));
+					_Realloc(GrowTo(m_capacity, _size));
 				ConstructRange(m_data + m_size, m_data + _size, _value);
 				m_size = _size;
 			}
@@ -421,14 +536,14 @@ namespace Reax
 		{
 			if (_size < m_size)
 				_size = m_size;
-			if (_size > m_caps || (_compact && _size != m_caps))
+			if (_size > m_capacity || (_compact && _size != m_capacity))
 				_Realloc(_size);
 			return *this;
 		}
 		//! Reallocate array and delete unused elements.
 		Array& Compact(void)
 		{
-			if (m_size != m_caps)
+			if (m_size != m_capacity)
 				_Realloc(m_size);
 			return *this;
 		}
@@ -478,29 +593,31 @@ namespace Reax
 		//!	Get first element.
 		T& Front(void)
 		{
-			ASSERT(m_size != 0, "Empty array");
+			ASSERT(m_size != 0, "Empty container");
 			return m_data[0];
 		}
 		//!	Get first element.
 		const T& Front(void) const
 		{
-			ASSERT(m_size != 0, "Empty array");
+			ASSERT(m_size != 0, "Empty container");
 			return m_data[0];
 		}
 		//!	Get last element.
 		T& Back(void)
 		{
-			ASSERT(m_size != 0, "Empty array");
+			ASSERT(m_size != 0, "Empty container");
 			return m_data[m_size - 1];
 		}
 		//!	Get last element.
 		const T& Back(void) const
 		{
-			ASSERT(m_size != 0, "Empty array");
+			ASSERT(m_size != 0, "Empty container");
 			return m_data[m_size - 1];
 		}
-
-		TODO_EX("Array", "Add Data");
+		//!	Get data.
+		T* Data(void) { return m_data; }
+		//!	Get data.
+		const T* Data(void) const { return m_data; }
 
 		// [iterators]
 
@@ -517,21 +634,17 @@ namespace Reax
 		//! Get index from iterator.
 		uint Index(ConstIterator _iter) const { return _iter - m_data; }
 		//! Get iterator from index
-		Iterator GetInterator(uint _index) { return > Iterator(m_data + (_index < m_size ? _index : m_size)); }
+		Iterator GetIterator(uint _index) { return Iterator(m_data + (_index < m_size ? _index : m_size)); }
 		//! Get iterator from index
-		ConstIterator GetInterator(uint _index) const { return > Iterator(m_data + (_index < m_size ? _index : m_size)); }
+		ConstIterator GetIterator(uint _index) const { return ConstIterator(m_data + (_index < m_size ? _index : m_size)); }
 
 		// [modifiers]
 
 		//! Add one element to end of array.
 		Array& Push(const T& _value)
 		{
-			if (m_size == m_caps)
-			{
-				if ((&_value - m_data) <= (ptrdiff_t)m_caps)
-					return Push(T(_value));
+			if (m_size == m_capacity)
 				_Reserve(1);
-			}
 			Construct(m_data + m_size, _value);
 			++m_size;
 			return *this;
@@ -539,7 +652,7 @@ namespace Reax
 		//! Add one element to end of array.
 		Array& Push(T&& _value)
 		{
-			if (m_size == m_caps)
+			if (m_size == m_capacity)
 				_Reserve(1);
 			Construct(m_data + m_size, Forward<T>(_value));
 			++m_size;
@@ -564,6 +677,11 @@ namespace Reax
 			m_size = _newSize;
 			return *this;
 		}
+		//! Append elements to end of array.
+		template <class I> Array& Push(I _start, I _end) { return _Push(_start, _end, IteratorTag<I>::Type); }
+		//! Append elements to end of array.
+		Array& Push(const InitializerList<T>& _list) { return Push(_list.begin(), (uint)_list.size()); }
+
 		//!	Delete one element from end of array.
 		Array& Pop(void)
 		{
@@ -609,9 +727,9 @@ namespace Reax
 			return Iterator(_src);
 		}
 		//! Erase an element by iterator. \return iterator to the next element. 	
-		Iterator Erase(const Iterator& _pos) { return Erase(_pos - m_data, 1); }
+		Iterator Erase(ConstIterator _pos) { return Erase(_pos - m_data, 1); }
 		//!	Erase a range of elements by iterators. \return iterator to the next element. 
-		Iterator Erase(const Iterator& _start, const Iterator& _end) { return Erase(_start - m_data, _end - m_data); }
+		Iterator Erase(ConstIterator _start, ConstIterator _end) { return Erase(_start - m_data, _end - m_data); }
 		//! Erase an element. \return iterator to the element by index. \note Ordering of elements is not saved.
 		Iterator FastErase(uint _index)
 		{
@@ -628,7 +746,7 @@ namespace Reax
 			return End();
 		}
 		//! Erase an element. \return iterator to the element by index. \note Ordering of elements is not saved.
-		Iterator FastErase(const Iterator& _pos) { return FastErase(_pos - m_data); }
+		Iterator FastErase(ConstIterator _pos) { return FastErase(_pos - m_data); }
 		//! Erase an element if found.
 		bool Remove(const T& _value)
 		{
@@ -652,6 +770,8 @@ namespace Reax
 			return false;
 		}
 		//! Insert an elements in position.
+		Iterator Insert(ConstIterator _pos, const T* _src, uint _count) { return Insert(_pos - m_data, _src, _count); }
+		//! Insert an elements in position.
 		Iterator Insert(uint _pos, const T* _src, uint _count)
 		{
 			if (_pos > m_size)
@@ -660,7 +780,7 @@ namespace Reax
 			if (Unused() < _count)
 			{
 				uint _newSize = m_size + _count;
-				uint _newCaps = GrowTo(m_caps, _newSize);
+				uint _newCaps = GrowTo(m_capacity, _newSize);
 				T* _newData = Allocate<T>(_newCaps);
 				T* _dst = _newData;
 				T* _iStart = _dst + _pos; // insert start
@@ -673,7 +793,7 @@ namespace Reax
 				Deallocate(m_data);
 
 				m_size = _newSize;
-				m_caps = _newCaps;
+				m_capacity = _newCaps;
 				m_data = _newData;
 			}
 			else
@@ -707,12 +827,14 @@ namespace Reax
 			return Iterator(m_data + _pos);
 		}
 		//! Construct new element in position.
+		template<class... Args> Iterator Emplace(ConstIterator _pos, Args&&... _args) { return Emplace(_pos - m_data, Forward<Args>(_args)...); }
+		//! Construct new element in position.
 		template<class... Args> Iterator Emplace(uint _pos, Args&&... _args)
 		{
 			if (_pos > m_size)
 				_pos = m_size;
 
-			if (m_size == m_caps)
+			if (m_size == m_capacity)
 				_Reserve(1);
 
 			if (_pos == m_size)
@@ -769,7 +891,7 @@ namespace Reax
 				if (*i == _value)
 					return i;
 			}
-			return i;
+			return End();
 		}
 		//! Search first element.
 		ConstIterator Find(const T& _value)	const
@@ -779,10 +901,10 @@ namespace Reax
 				if (*i == _value)
 					return i;
 			}
-			return i;
+			return End();
 		}
 		//! Search next element.
-		Iterator Find(const Iterator& _start, const T& _value)
+		Iterator Find(ConstIterator _start, const T& _value)
 		{
 			ASSERT(Index(_start) <= m_size, "Invalid iterator");
 			for (Iterator i = _start, e = End(); i != e; ++i)
@@ -790,10 +912,10 @@ namespace Reax
 				if (*i == _value)
 					return i;
 			}
-			return i;
+			return End();
 		}
 		//! Search next element.
-		ConstIterator Find(const ConstIterator& _start, const T& _value) const
+		ConstIterator Find(ConstIterator _start, const T& _value) const
 		{
 			ASSERT(Index(_start) <= m_size, "Invalid iterator");
 			for (ConstIterator i = _start, e = End(); i != e; ++i)
@@ -801,7 +923,7 @@ namespace Reax
 				if (*i == _value)
 					return i;
 			}
-			return i;
+			return End();
 		}
 
 		TODO_EX("Array", "Add BinarySearch");
@@ -817,106 +939,432 @@ namespace Reax
 			MoveAndDestroyRange(_newData, m_data, m_data + m_size);
 			Deallocate<T>(m_data);
 			m_data = _newData;
-			m_caps = _size;
+			m_capacity = _size;
 		}
 		//! Do reserve new elements.
 		void _Reserve(uint _append)
 		{
 			if (Unused() < _append)
-				_Realloc(GrowTo(m_caps, m_size + _append));
+				_Realloc(GrowTo(m_capacity, m_size + _append));
+		}
+		//! 
+		template <class I> Array& _Push(I _start, I _end, ArrayIteratorTag)
+		{
+			return Push(&(*_start), IteratorDistance(_start, _end));
+		}
+		//!
+		template <class I> Array& _Push(I _start, I _end, GenericIteratorTag)
+		{
+			_Reserve(IteratorDistance(_start, _end));
+			while (_start != _end)
+				Push(*_start++);
+			return *this;
 		}
 
 		//! Number of used elements.
 		uint m_size = 0;
 		//! Number of all elements.
-		uint m_caps = 0;
+		uint m_capacity = 0;
 		//! The data.
 		T* m_data = nullptr;
 	};
 
+	//!
+	template <class T> auto begin(Array<T>& _array)->decltype(_array.Begin()) { return _array.Begin(); }
+	//!
+	template <class T> auto begin(const Array<T>& _array)->decltype(_array.Begin()) { return _array.Begin(); }
+	//!
+	template <class T> auto end(Array<T>& _array)->decltype(_array.End()) { return _array.End(); }
+	//!
+	template <class T> auto end(const Array<T>& _array)->decltype(_array.End()) { return _array.End(); }
+
 	//----------------------------------------------------------------------------//
-	// NodeIterator
+	// ListIterator
 	//----------------------------------------------------------------------------//
 
-	template <class T> class NodeIterator
+	//! Iterator for double-linked nodes.
+	template <class T> class ListIterator
 	{
 	public:
+		typedef typename BaseType<decltype(reinterpret_cast<T*>(0)->Value())>::Type ValueType;
+		//!
+		ListIterator(T* _ptr = nullptr) : m_ptr(_ptr) { }
+
+		//!	Implicit conversion from non-const iterator to const iterator.
+		operator const typename ListIterator<const T>(void) const { return ListIterator<const T>(m_ptr); }
+
+		//!	Get address.
+		ValueType* operator & (void) { ASSERT(m_ptr != nullptr); return &(m_ptr->Value()); }
+		//!	Get address.
+		ValueType* operator -> (void) { ASSERT(m_ptr != nullptr); return &(m_ptr->Value()); }
+		//!	Get reference.
+		ValueType& operator * (void) { ASSERT(m_ptr != nullptr); return m_ptr->Value(); }
+		//!	Get node.
+		T* Node(void) { return m_ptr; }
+
+		//!	Go to next element.
+		ListIterator& operator ++ (void) { ASSERT(m_ptr != nullptr); m_ptr = m_ptr->Next(); return *this; }
+		//!	Go to next element.
+		ListIterator operator ++ (int) { ASSERT(m_ptr != nullptr); ListIterator _next(m_ptr); m_ptr = m_ptr->Next(); return _next; }
+		//!	Go to prev element.
+		ListIterator& operator -- (void) { ASSERT(m_ptr != nullptr); m_ptr = m_ptr->Prev(); return *this; }
+		//!	Go to prev element.
+		ListIterator operator -- (int) { ASSERT(m_ptr != nullptr); ListIterator _prev(m_ptr); m_ptr = m_ptr->Prev(); return _prev; }
+
+		//!
+		bool operator == (const ListIterator& _rhs) const { return m_ptr == _rhs.m_ptr; }
+		//!
+		bool operator != (const ListIterator& _rhs) const { return m_ptr != _rhs.m_ptr; }
 
 	protected:
-		T* m_node;
+
+		T* m_ptr;
 	};
+
+	//!
+	template <class T> struct IteratorTag<ListIterator<T>> { static const auto Type = GenericIteratorTag::ID; };
 
 	//----------------------------------------------------------------------------//
 	// List
 	//----------------------------------------------------------------------------//
 
+	//! Double-linked list.
 	template <class T> class List
 	{
 	public:
-		class Node
+		//!
+		struct Node;
+
+		//!
+		struct NodeBase
 		{
-		public:
+			//!
+			Node* Next(void) { return m_next; }
+			//!
+			const Node* Next(void) const { return m_next; }
+			//!
+			Node* Prev(void) { return m_prev; }
+			//!
+			const Node* Prev(void) const { return m_prev; }
 
 		protected:
 			friend class List;
-
-			T m_value;
-			Node* prev;
-			Node* next;
+			//!
+			Node* m_prev;
+			//!
+			Node* m_next;
 		};
 
-		// [capasity]
-		// Size
-		// IsEmpty
-		// NonEmpty
-		// Resize
-		// Clear
+		//!
+		struct Node : public NodeBase
+		{
+			//!
+			T& Value(void) { return m_value; }
+			//!
+			const T& Value(void) const { return m_value; }
+
+		protected:
+			friend class List;
+			//!
+			T m_value;
+		};
+
+		//!
+		typedef ListIterator<Node> Iterator;
+		//!
+		typedef ListIterator<const Node> ConstIterator;
+
+		//!
+		List(void) { _Reset(); }
+		//!
+		~List(void) { Clear(); }
+		//! 
+		List(const List& _other) : List()
+		{
+			for (const T& i : _other)
+				Push(i);
+		}
+		//!
+		List(List&& _temp) : m_size(_temp.m_size)
+		{
+			Node* _first = _temp.m_tail.m_next;
+			Node* _last = _temp.m_tail.m_prev;
+			if (_first != _last)
+			{
+				_Bind(_first, _last);
+				_temp._Reset();
+			}
+			else
+				_Reset();
+		}
+		//!
+		List(InitializerList<T> _list)
+		{
+			_Reset();
+			for (const T& i : _list)
+				Push(i);
+		}
+
+		//!
+		List& operator = (const List& _rhs)
+		{
+			if (&m_tail != _rhs.m_tail)
+			{
+				Clear();
+				for (const T& i : _rhs)
+					Push(i);
+			}
+			return *this;
+		}
+		//!
+		List& operator = (List&& _rhs)
+		{
+			Node* _first = _rhs.m_tail.m_next;
+			Node* _last = _rhs.m_tail.m_prev;
+			uint _size = _rhs.m_size;
+
+			if (m_size)
+			{
+				_rhs._Bind(m_tail.m_next, m_tail.m_prev);
+				_rhs.m_size = m_size;
+			}
+			else
+				_rhs._Reset();
+
+			if (_first != _last)
+			{
+				_Bind(_first, _last);
+				m_size = _size;
+			}
+			else
+				_Reset();
+
+			return *this;
+		}
+		//!
+		List& operator = (InitializerList<T> _rhs)
+		{
+			Clear();
+			for (const T& i : _rhs)
+				Push(i);
+			return *this;
+		}
+
+		//!
+		uint Size(void) const { return m_size; }
+		//!
+		bool IsEmpty(void) const { return m_size == 0; }
+		//!
+		bool NonEmpty(void) const { return m_size != 0; }
+		//!
+		List& Clear(void)
+		{
+			while (m_size)
+				_Erase(m_tail.m_next);
+			return *this;
+		}
 
 
-		// [access]
-		// Front
-		// Back
+		//!
+		T& Front(void) { ASSERT(m_size != 0); return m_tail.m_next->m_value; }
+		//!
+		const T& Front(void) const { ASSERT(m_size != 0); return m_tail.m_next->m_value; }
+		//!
+		T& Back(void) { ASSERT(m_size != 0); return m_tail.m_prev->m_value; }
+		//!
+		const T& Back(void) const { ASSERT(m_size != 0); return m_tail.m_prev->m_value; }
 
-		// [iterators]
-		// Begin
-		// End
+		//!
+		Iterator Begin(void) { return m_tail.m_next; }
+		//!
+		ConstIterator Begin(void) const { return m_tail.m_next; }
+		//!
+		Iterator End(void) { return Iterator(static_cast<Node*>(&m_tail)); }
+		//!
+		ConstIterator End(void) const { return ConstIterator(static_cast<const Node*>(&m_tail)); }
 
-		// [modifiers]
-		// Assign
-		// EmplaceFront
-		// PushFront
-		// PopFront
-		// EmplaceBack
-		// PushBack
-		// PopBack
-		// Emplace
-		// Insert
-		// Erase
 
-		// [compare]
-		// ==
-		// !=
+		//!
+		List& PushFront(const T& _value)
+		{
+			Node* _newNode = _Insert(m_tail.m_next);
+			Construct(&_newNode->m_value, _value);
+			return *this;
+		}
+		//!
+		List& PushFront(T&& _value)
+		{
+			Node* _newNode = _Insert(m_tail.m_next);
+			Construct(&_newNode->m_value, Forward<T>(_value));
+			return *this;
+		}
+		//!
+		List& Push(const T& _value)
+		{
+			Node* _newNode = _Insert(&m_tail);
+			Construct(&_newNode->m_value, _value);
+			return *this;
+		}
+		//!
+		List& Push(T&& _value)
+		{
+			Node* _newNode = _Insert(&m_tail);
+			Construct(&_newNode->m_value, Forward<T>(_value));
+			return *this;
+		}
 
-		// [operations]
-		// splice
-		// remove
-		// remove_if
-		// unique
-		// merge
-		// sort
-		// reverse
-		// Find
+		//!
+		List& PopFront(void)
+		{
+			if (m_size)
+				_Erase(m_tail.m_next);
+			return *this;
+		}
+		//!
+		List& Pop(void)
+		{
+			if (m_size)
+				_Erase(m_tail.m_prev);
+			return *this;
+		}
+
+		//!
+		Iterator Insert(ConstIterator _pos, const T& _value)
+		{
+			ASSERT(_pos.Node() != nullptr);
+			Node* _newNode = _Insert(_pos);
+			Construct(&_newNode->m_value, _value);
+			return _newNode;
+		}
+		//!
+		Iterator Erase(ConstIterator _pos)
+		{
+			ASSERT(_pos.Node() != nullptr);
+			if (_pos.Node() != &m_tail)
+				return _Erase(_pos.Node());
+			return End();
+		}
+
+		TODO_EX("List", "Add insert");
+		TODO_EX("List", "Add Emplace, EmplaceFront, EmplaceBack");
+		TODO_EX("List", "Add Splice, Merge, Sort, Reverse, Unique");
+
+
+		//!
+		bool operator == (const List& _rhs) const
+		{
+			if (m_size != _rhs.m_size)
+				return false;
+			if (&m_tail == &_rhs.m_tail)
+				return true;
+			for (ConstIterator l = Begin(), r = _rhs.Begin(), e = End(); l != e; ++l, ++r)
+			{
+				if (*l != *r)
+					return false;
+			}
+			return true;
+		}
+		//!
+		bool operator != (const List& _rhs) const { return !(*this == _rhs); }
+
+
+		//!
+		Iterator Find(const T& _value) { return Find(Begin(), _value); }
+		//!
+		ConstIterator Find(const T& _value) const { return Find(Begin(), _value); }
+		//!
+		Iterator Find(ConstIterator _start, const T& _value)
+		{
+			for (ConstIterator i = _start, e = End(); i != e; ++i)
+			{
+				if (*i == _value)
+					return i;
+			}
+			return End();
+		}
+		//!
+		ConstIterator Find(ConstIterator _start, const T& _value) const
+		{
+			for (ConstIterator i = _start, e = End(); i != e; ++i)
+			{
+				if (*i == _value)
+					return i;
+			}
+			return End();
+		}
+		//!
+		Iterator Remove(const T& _value) { return Erase(Find(_value)); }
+		//!
+		Iterator Remove(ConstIterator _start, const T& _value) { return Erase(Find(_start, _value)); }
 
 	protected:
-		uint m_size = 0;
-		Node* m_first = nullptr;
-		Node* m_last = nullptr;
+		//!
+		void _Reset(void)
+		{
+			m_size = 0;
+			m_tail.m_next = static_cast<Node*>(&m_tail); // head --> tail
+			m_tail.m_prev = static_cast<Node*>(&m_tail); // tail <-- head
+		}
+		//!
+		void _Bind(Node* _first, Node* _last)
+		{
+			ASSERT(_first != _last);
+			ASSERT(_first != nullptr);
+			ASSERT(_last != nullptr);
+
+			m_tail.m_next = _first;
+			_first->m_prev = static_cast<Node*>(&m_tail);
+			m_tail.m_prev = _last;
+			_last->m_next = static_cast<Node*>(&m_tail);
+		}
+		//!
+		Node* _Insert(NodeBase* _dest)
+		{
+			ASSERT(_dest != nullptr);
+
+			Node* _newNode = Allocate<Node>(1);
+			_newNode->m_next = static_cast<Node*>(_dest);
+			_newNode->m_prev = _dest->m_prev;
+			_dest->m_prev->m_next = _newNode;
+			_dest->m_prev = _newNode;
+
+			++m_size;
+
+			return _newNode;
+		}
+		//!
+		Node* _Erase(Node* _node)
+		{
+			ASSERT(_node != nullptr && _node != &m_tail);
+			Node* _next = _node->m_next;
+			_node->m_next->m_prev = _node->m_prev;
+			_node->m_prev->m_next = _node->m_next;
+			--m_size;
+
+			Destroy(&_node->m_value);
+			Deallocate(_node);
+
+			return _next; // ?
+		}
+
+		uint m_size;
+		NodeBase m_tail;
 	};
+
+	//!
+	template <class T> auto begin(List<T>& _list)->decltype(_list.Begin()) { return _list.Begin(); }
+	//!
+	template <class T> auto begin(const List<T>& _list)->decltype(_list.Begin()) { return _list.Begin(); }
+	//!
+	template <class T> auto end(List<T>& _list)->decltype(_list.End()) { return _list.End(); }
+	//!
+	template <class T> auto end(const List<T>& _list)->decltype(_list.End()) { return _list.End(); }
 
 	//----------------------------------------------------------------------------//
 	// Pair
 	//----------------------------------------------------------------------------//
 
+	//! Pair. 
 	template <class T, class U> struct Pair
 	{
 		T first;
@@ -928,247 +1376,599 @@ namespace Reax
 	};
 
 	//----------------------------------------------------------------------------//
+	// Hash 
+	//----------------------------------------------------------------------------//
+
+	//! SDMB hash
+	inline uint Hash(const void* _data, uint _size, uint _hash = 0)
+	{
+		const uint8* _start = reinterpret_cast<const uint8*>(_data);
+		const uint8* _end = _start + _size;
+		while (_start < _end)
+			_hash = *_start++ + +(_hash << 6) + (_hash << 16) - _hash;
+		return _hash;
+	}
+
+	//! Generic hash function.
+	template <class T> inline uint MakeHash(const T& _value) { return Hash(&_value, sizeof(_value)); }
+	//!
+	template <> inline uint MakeHash(const char& value) { return (uint)value; }
+	//!
+	template <> inline uint MakeHash(const unsigned char& value) { return (uint)value; }
+	//!
+	template <> inline uint MakeHash(const int16& _value) { return (uint)_value; }
+	//!
+	template <> inline uint MakeHash(const uint16& _value) { return (uint)_value; }
+	//!
+	template <> inline uint MakeHash(const uint& _value) { return (uint)_value; }
+	//!
+	template <> inline uint MakeHash(const int& _value) { return (uint)_value; }
+	//!
+	template <> inline uint MakeHash(const int64& _value) { return (uint)((_value >> 32) | (_value & 0xffffffff)); }
+	//!
+	template <> inline uint MakeHash(const uint64& _value) { return (uint)((_value >> 32) | (_value & 0xffffffff)); }
+	//!
+	inline uint MakeHash(void* _value) { return (uint)(size_t)_value; }
+	//!
+	inline uint MakeHash(const void* _value) { return (uint)(size_t)_value; }
+	//!
+	template <class T> inline uint MakeHash(T* _value) { return (uint)((size_t)_value / sizeof(T)); }
+	//!
+	template <class T> inline uint MakeHash(const T* _value) { return (uint)((size_t)_value / sizeof(T)); }
+
+	//----------------------------------------------------------------------------//
 	// HashMap
 	//----------------------------------------------------------------------------//
 
+	//! Unordered associative array.
 	template <class T, class U> class HashMap
 	{
 	public:
-		typedef Pair<T, U> KeyValue;
+		//! Max size of bucket = 2^(MAX_BUCKET_SIZE_POW2) (0=1, 1=2, 2=4, 3=8 ...)
+		static const uint MAX_BUCKET_SIZE_POW2 = 0;
+		//!
+		typedef Pair<const T, U> KeyValue;
 
-		class Node
+		//!
+		struct Node;
+
+		//!
+		struct NodeBase
 		{
-		public:
+			//!
+			Node* Next(void) { return m_next; }
+			//!
+			const Node* Next(void) const { return m_next; }
+			//!
+			Node* Prev(void) { return m_prev; }
+			//!
+			const Node* Prev(void) const { return m_prev; }
 
 		protected:
 			friend class HashMap;
-
-			KeyValue m_value;
-			uint m_hash;
+			//!
 			Node* m_prev;
+			//!
 			Node* m_next;
-			Node* m_down;
 		};
 
-		// [capasity]
-		// Size
-		// IsEmpty
-		// NonEmpty
-
-
-		// [access]
-
-		// [iterators]
-
-		// [modifiers]
-
-		// [compare]
-
-		// [operations]
-
-	protected:
-		uint m_caps = 0;
-		uint m_size = 0;
-		Node* m_nodes = nullptr;
-		Node** m_buckets = nullptr;
-	};
-
-	//----------------------------------------------------------------------------//
-	// StringBuffer
-	//----------------------------------------------------------------------------//
-
-	//! Get length of string.
-	inline uint CStringLength(const char* _str, int _length = -1) { return _str ? (uint)(_length < 0 ? strlen(_str) : _length) : 0; }
-	//! Get length of string.
-	inline uint CStringLength(const wchar_t* _str, int _length = -1) { return _str ? (uint)(_length < 0 ? wcslen(_str) : _length) : 0; }
-
-	//!
-	template <class T> struct StringBuffer : public NonCopyable
-	{
-	public:
-
-	private:
-		//!	Construct. \note For internal usage.
-		StringBuffer(uint _size = 0) : capacity(_size) { }
-		//!	Construct from string. \note For internal usage.
-		StringBuffer(uint _size, const T* _str, uint _length) : capacity(_size), length(_length)
+		//!
+		struct Node : public NodeBase
 		{
-			memcpy(str, _str, _length * sizeof(T));
-			str[_length] = 0;
-		}
+			//!
+			KeyValue& Value(void) { return m_value; }
+			//!
+			const KeyValue& Value(void) const { return m_value; }
+			//!
+			Node* Down(void) { return m_down; }
+			//!
+			const Node* Down(void) const { return m_down; }
 
-	public:
-		//!	Get new buffer with specified size.
-		//!\param[in] _size specifies max length.
-		static StringBuffer* New(uint _size)
-		{
-			if (_size == 0)
-				return Null();
-			StringBuffer* _buff = AllocateBlock<StringBuffer>(sizeof(StringBuffer) + _size);
-			new(_buff) StringBuffer(_size);
-			return _buff;
-		}
-		//! Get new buffer from string.
-		static StringBuffer* New(const T* _str, int _length = -1)
-		{
-			_length = CStringLength(_str);
-			if (_length)
-			{
-				StringBuffer* _buff = AllocateBlock<StringBuffer>(sizeof(StringBuffer) + _length);
-				new(_buff) StringBuffer(_length, _str, _length);
-				return _buff;
-			}
-			return Null();
-		}
-		//!	Get empty buffer.
-		static StringBuffer* Null(void)
-		{
-			static StringBuffer _empty;
-			AtomicAdd(_empty.refs, 1);
-			return &_empty;
-		}
+		protected:
+			friend class HashMap;
+			//!
+			Node* m_down;
+			//!
+			uint m_hash;
+			//!
+			KeyValue m_value;
+		};
 
-		//! Resize and make unique. It's threadsafe.
-		//!\param[in] _size specifies max length.
-		StringBuffer* Reserve(uint _size, bool _compact = false)
+		//!
+		typedef ListIterator<Node> Iterator;
+		//!
+		typedef ListIterator<const Node> ConstIterator;
+
+		//!
+		HashMap(void) { _ResetList(); }
+		//!
+		~HashMap(void)
 		{
-			if (IsShared() || capacity < _size) // buffer is shared or too small.
-			{
-				uint _newSize = _compact ? (capacity < _size ? _size : capacity) : (GrowTo(capacity, _size) | 15);
-				StringBuffer* _buff = New(_newSize);
-				memcpy(_buff->str, str, (length + 1) * sizeof(T));
-				_buff->length = length;
-				Release();
-				return _buff;
-			}
-			return this;
+			Clear();
+			delete[] m_buckets;
 		}
 		//!
-		StringBuffer* Unique(void)
+		HashMap(const HashMap& _other)
 		{
-			return Reserve(capacity, true);
+			_ResetList();
+			Insert(_other.Begin(), _other.End());
 		}
-		//!	Make unique directly.
-		StringBuffer* Detach(void)
+		//!
+		HashMap(HashMap&& _temp) : m_size(_temp.m_size)
 		{
-			StringBuffer* _buff = New(capacity);
-			memcpy(_buff->str, str, (length + 1) * sizeof(T));
-			_buff->length = length;
-			Release();
-			return _buff;
+			Node* _first = _temp.m_tail.m_next;
+			Node* _last = _temp.m_tail.m_prev;
+			if (_first != _last)
+			{
+				_BindList(_first, _last);
+				_temp._ResetList();
+				Swap(m_buckets, _temp.m_buckets);
+				Swap(m_numBuckets, _temp.m_numBuckets);
+			}
+			else
+				_ResetList();
+		}
+		//!
+		HashMap(ConstIterator _start, ConstIterator _end) : HashMap() { Insert(_start, _end); }
+		//!
+		HashMap(InitializerList<KeyValue> _list) : HashMap() { Insert(_list); }
+
+		//!
+		HashMap& operator = (const HashMap& _rhs)
+		{
+			if (m_buckets != _rhs.m_buckets)
+				Clear().Insert(_rhs.Begin(), _rhs.End());
+			return *this;
+		}
+		//!
+		HashMap& operator = (HashMap&& _rhs)
+		{
+			Node* _first = _rhs.m_tail.m_next;
+			Node* _last = _rhs.m_tail.m_prev;
+			uint _size = _rhs.m_size;
+
+			if (m_size)
+			{
+				_rhs._BindList(m_tail.m_next, m_tail.m_prev);
+				_rhs.m_size = m_size;
+			}
+			else
+				_rhs._ResetList();
+
+			if (_first != _last)
+			{
+				_BindList(_first, _last);
+				m_size = _size;
+			}
+			else
+				_ResetList();
+
+			Swap(m_buckets, _rhs.m_buckets);
+			Swap(m_numBuckets, _rhs.m_numBuckets);
+
+			return *this;
+		}
+		//!
+		HashMap& operator = (InitializerList<KeyValue> _list) { return Clear().Insert(_list); }
+
+
+		//!
+		const T& Front(void) const { ASSERT(m_size != 0); return m_tail.m_next->m_value.first; }
+		//!
+		const T& Back(void) const { ASSERT(m_size != 0); return m_tail.m_prev->m_value.first; }
+
+		//!
+		Iterator Begin(void) { return m_tail.m_next; }
+		//!
+		ConstIterator Begin(void) const { return m_tail.m_next; }
+		//!
+		Iterator End(void) { return static_cast<Node*>(&m_tail); }
+		//!
+		ConstIterator End(void) const { return static_cast<const Node*>(&m_tail); }
+
+
+		//!
+		uint Size(void) const { return m_size; }
+		//!
+		bool IsEmpty(void) const { return m_size == 0; }
+		//!
+		bool NonEmpty(void) const { return m_size != 0; }
+		//!
+		HashMap& Clear(void)
+		{
+			while (m_size)
+			{
+				Node* _head = m_tail.m_next;
+				Node* _next = _head->m_next;
+				_head->m_next->m_prev = _head->m_prev;
+				_head->m_prev->m_next = _head->m_next;
+				--m_size;
+			}
+			memset(m_buckets, 0, m_numBuckets * sizeof(m_buckets[0]));
+			return *this;
 		}
 
-		//!\return true if buffer is shared.
-		bool IsShared(void) const
+		//!
+		uint BucketCount(void) const { return m_numBuckets; }
+
+		//!
+		U& operator[] (const T& _key)
 		{
-			return AtomicGet(refs, MemoryOrder::Relaxed) > 1;
+			uint _hash = MakeHash(_key);
+			Node* _node = _Find(_key, _hash);
+			if (!_node)
+			{
+				_node = _Insert(_hash);
+				Construct(const_cast<T*>(&_node->m_value.first), _key);
+				Construct(&_node->m_value.second);
+			}
+			return _node->m_value.second;
 		}
-		//!\return true if buffer is unique.
-		bool IsUnique(void) const
+		//!
+		U& operator[] (T&& _key)
 		{
-			return AtomicGet(refs, MemoryOrder::Relaxed) == 1;
-		}
-		//!	Increments the counter of references.
-		StringBuffer* AddRef(void)
-		{
-			AtomicAdd(refs, 1);
-			return this;
-		}
-		//!	Decrements the counter of references and destroy this when he equals zero.
-		void Release(void)
-		{
-			if (AtomicSubtract(refs, 1) == 1)
-				Deallocate(this);
+			uint _hash = MakeHash(_key);
+			Node* _node = _Find(_key, _hash);
+			if (!_node)
+			{
+				_node = _Insert(_hash);
+				Construct(const_cast<T*>(&_node->m_value.first), Forward<T>(_key));
+				Construct(&_node->m_value.second);
+			}
+			return _node->m_value.second;
 		}
 
-		//! Number of references. \note Read only.
-		mutable int refs = 1;
-		//! Length of string, without last null symbol.
-		uint length = 0;
-		//! Max length of string, without last null symbol. \note Read only.
-		uint capacity = 0;
-		union
+		//!
+		Iterator Insert(const KeyValue& _value)
 		{
-			//! The string. Max size is capasity + 1.
-			T str[1];
-			T ch = 0;
-		};
+			uint _hash = MakeHash(_value.first);
+			Node* _node = _Find(_value.first, _hash);
+			if (!_node)
+			{
+				_node = _Insert(_hash);
+				Construct(const_cast<T*>(&_node->m_value.first), _value.first);
+				Construct(&_node->m_value.second, _value.second);
+			}
+			else
+				_node->m_value.second = _value.second;
+			return _node;
+		}
+		//!
+		Iterator Insert(const KeyValue&& _value)
+		{
+			uint _hash = MakeHash(_value.first);
+			Node* _node = _Find(_value.first, _hash);
+			if (!_node)
+			{
+				_node = _Insert(_hash);
+				Construct(const_cast<T*>(&_node->m_value.first), Forward<T>(_value.first));
+				Construct(&_node->m_value.second, Forward<U>(_value.second));
+			}
+			else
+				_node->m_value.second = _value.second;
+			return _node;
+		}
+		//!
+		Iterator Insert(ConstIterator _iter)
+		{
+			ASSERT(_iter.Node() != nullptr);
+			Node* _insert = _iter.Node();
+			uint _hash = _node->m_hash;
+			Node* _node = _Find(_insert->m_value.first, _hash);
+			if (!_node)
+			{
+				_node = _Insert(_hash);
+				Construct(const_cast<T*>(&_newNode->m_value.first), _insert->m_value.first);
+				Construct(&_newNode->m_value.second, _insert->m_value.second);
+			}
+			else
+				_node->m_value.second = _insert->m_value.second;
+
+			return _node;
+		}
+		//!
+		Iterator Insert(ConstIterator _start, ConstIterator _end)
+		{
+			if (_start != _end)
+			{
+				Iterator _r = Insert(_start++);
+				for (; _start != _end; ++_start)
+					Insert(_start);
+				return _r;
+			}
+			return End();
+		}
+		//!
+		Iterator Insert(InitializerList<KeyValue> _list)
+		{
+			if (_list.size())
+			{
+				const KeyValue* _start = _list.begin();
+				Iterator _r = Insert(*_start++);
+				for (; _start != _list.end(); ++_start)
+					Insert(*_start);
+				return _r;
+			}
+			return End();
+		}
+
+		//!
+		Iterator Erase(const T& _key)
+		{
+			uint _hash = MakeHash(_key);
+			uint _index = _hash & (m_numBuckets - 1);
+			Node* _prev = nullptr;
+			Node* _node = _Find(_key, _index, _prev);
+			if (_node)
+				return _Erase(_node, _index, _prev);
+			return End();
+		}
+		//!
+		Iterator Erase(ConstIterator _pos)
+		{
+			Node* _node = _pos.Node();
+			ASSERT(_node != nullptr);
+			if (_pos != &m_tail)
+			{
+				uint _index = _node->m_hash & (m_numBuckets - 1);
+				return _Erase(_node, _index, _Prev(m_buckets[_index], _node));
+			}
+			return End();
+		}
+
+		//!
+		Iterator Find(const T& _key)
+		{
+			uint _hash = MakeHash(_key);
+			Node* _node = _Find(_key, _hash);
+			return _node ? _node : End();
+		}
+		//!
+		ConstIterator Find(const T& _key) const
+		{
+			uint _hash = MakeHash(_key);
+			Node* _node = _Find(_key, _hash);
+			return _node ? _node : End();
+		}
+		//!
+		bool Contains(const T& Key) const
+		{
+			return _Find(_key, MakeHash(_key)) != nullptr;
+		}
+
+	protected:
+		//!
+		void _ResetList(void)
+		{
+			m_size = 0;
+			m_tail.m_next = static_cast<Node*>(&m_tail); // head --> tail
+			m_tail.m_prev = static_cast<Node*>(&m_tail); // tail <-- head
+		}
+		//!
+		void _BindList(Node* _first, Node* _last)
+		{
+			ASSERT(_first != _last);
+			ASSERT(_first != nullptr);
+			ASSERT(_last != nullptr);
+
+			m_tail.m_next = _first;
+			_first->m_prev = static_cast<Node*>(&m_tail);
+			m_tail.m_prev = _last;
+			_last->m_next = static_cast<Node*>(&m_tail);
+		}
+		//!
+		Node* _Find(const T& _key, uint _hash) const
+		{
+			for (Node* _node = m_buckets ? m_buckets[_hash & (m_numBuckets - 1)] : nullptr; _node; _node = _node->m_down)
+			{
+				if (_node->m_value.first == _key)
+					return _node;
+			}
+			return nullptr;
+		}
+		//!
+		Node* _Find(const T& _key, uint _index, Node*& _prev) const
+		{
+			for (Node* _node = m_buckets ? m_buckets[_index] : nullptr; _node; _prev = _node, _node = _node->m_down)
+			{
+				if (_node->m_value.first == _key)
+					return _node;
+			}
+			return nullptr;
+		}
+		//!
+		Node* _Prev(Node* _bucket, Node* _node)
+		{
+			for (Node* _prev = nullptr; _bucket; _prev = _bucket, _bucket = _bucket->m_down)
+			{
+				if (_bucket == _node)
+					return _prev;
+			}
+			return nullptr;
+		}
+		//!
+		void _Rehash(uint _newSize)
+		{
+			Node** _newData = new Node*[_newSize];
+			memset(_newData, 0, _newSize * sizeof(Node*));
+
+			delete[] m_buckets;
+			m_buckets = _newData;
+			m_numBuckets = _newSize;
+
+			uint _mask = m_numBuckets - 1;
+			for (Node* i = m_tail.m_next; i != &m_tail; i = i->m_next)
+			{
+				uint _index = i->m_hash & _mask;
+				i->m_down = m_buckets[_index];
+				m_buckets[_index] = i;
+			}
+		}
+		//!
+		Node* _Insert(uint _hash)
+		{
+			if (!m_buckets)
+			{
+				m_numBuckets = 4; // min num buckets
+				m_buckets = new Node*[4];
+				memset(m_buckets, 0, m_numBuckets * sizeof(Node*));
+			}
+
+			uint _index = _hash & (m_numBuckets - 1);
+			Node* _newNode = Allocate<Node>(1);
+			_newNode->m_hash = _hash;
+
+			_newNode->m_next = static_cast<Node*>(&m_tail);
+			_newNode->m_prev = m_tail.m_prev;
+			m_tail.m_prev->m_next = _newNode;
+			m_tail.m_prev = _newNode;
+
+			_newNode->m_down = m_buckets[_index];
+			m_buckets[_index] = _newNode;
+
+			++m_size;
+
+			if (m_size > m_numBuckets << MAX_BUCKET_SIZE_POW2)
+				_Rehash(m_numBuckets << 1);
+
+			return _newNode;
+		}
+		//!
+		Node* _Erase(Node* _node, uint _index, Node* _prev)
+		{
+			ASSERT(_node != nullptr);
+			ASSERT(_node != &m_tail);
+
+			if (_prev)
+				_prev->m_down = _node->m_down;
+			else
+				m_buckets[_index] = _node->m_down;
+
+			Node* _next = _node->m_next;
+			_node->m_next->m_prev = _node->m_prev;
+			_node->m_prev->m_next = _node->m_next;
+			--m_size;
+
+			Destroy(&_node->m_value);
+			Deallocate(_node);
+
+			return _next;
+		}
+
+
+		NodeBase m_tail;
+		Node** m_buckets = nullptr;
+		uint m_numBuckets = 0;
+		uint m_size;
 	};
+
+	//!
+	template <class T, class U> auto begin(HashMap<T, U>& _map)->decltype(_map.Begin()) { return _map.Begin(); }
+	//!
+	template <class T, class U> auto begin(const HashMap<T, U>& _map)->decltype(_map.Begin()) { return _map.Begin(); }
+	//!
+	template <class T, class U> auto end(HashMap<T, U>& _map)->decltype(_map.End()) { return _map.End(); }
+	//!
+	template <class T, class U> auto end(const HashMap<T, U>& _map)->decltype(_map.End()) { return _map.End(); }
+
+	//!\} Container
 
 	//----------------------------------------------------------------------------//
 	// String
 	//----------------------------------------------------------------------------//
 
-	//!
-	class RX_API String
+	//!\addtogroup String
+	//!\{
+
+	//! Multibyte string.
+	class String
 	{
 	public:
-		typedef StringBuffer<char> Buffer;
+		//!
+		//typedef char* Iterator;
+		//!
+		//typedef const char* ConstIterator;
+		//!
+		typedef ArrayIterator<char> Iterator;
+		//!
+		typedef ArrayIterator<const char> ConstIterator;
 
 		//!
-		DEPRECATED class Proxy
+		String(void) = default;
+		//!
+		~String(void) { if (m_data) Deallocate(m_data); }
+		//!
+		String(const String& _other) { Append(_other); }
+		//!
+		String(String&& _temp) : m_length(_temp.m_length), m_capacity(_temp.m_capacity), m_data(_temp.m_data)
 		{
-			friend class String;
-
-			Proxy(String* _str, uint _index) : str(_str), index(_index) { }
-
-			String* str;
-			uint index;
-
-		public:
-			//!
-			Proxy& operator = (const Proxy& _rhs)
-			{
-				str->SetChar(index, static_cast<char>(_rhs));
-				return *this;
-			}
-			//!
-			Proxy& operator = (char _ch)
-			{
-				str->SetChar(index, _ch);
-				return *this;
-			}
-			//!
-			operator const char(void) const { return str->At(index); }
-		};
-
-		//! 
-		String(void) : m_buffer(Buffer::Null()) { }
-		//! 
-		~String(void) { if (m_buffer) m_buffer->Release(); }
-		//! 
-		String(const String& _other) : m_buffer(_other.m_buffer->AddRef()) {}
-		//! 
-		String(String&& _temp) { Swap(m_buffer, _temp.m_buffer); }
-		//! 
-		String(const char* _str, int _length = -1) : m_buffer(Buffer::New(_str)) { }
-		//!
-		String(const char* _str, const char* _end) : m_buffer(Buffer::New(_str, (int)(_end - _str))) { }
-		//!
-		String(char _ch) : m_buffer(_ch ? Buffer::New(&_ch, 1) : Buffer::Null()) { }
-		//!
-		String(uint _count, char _ch) : m_buffer(Buffer::Null()) { Append(_count, _ch); }
-
-		//! 
-		String& operator = (const String& _rhs)
-		{
-			_rhs.m_buffer->AddRef();
-			m_buffer->Release();
-			m_buffer = _rhs.m_buffer;
-			return *this;
+			_temp.m_length = 0;
+			_temp.m_capacity = 0;
+			_temp.m_data = nullptr;
 		}
-		//! 
-		String& operator = (String&& _rhs)
-		{
-			m_buffer->Release();
-			m_buffer = _rhs.m_buffer;
-			_rhs.m_buffer = nullptr;
-			return *this;
-		}
-		//! 
-		String& operator = (const char* _rhs) { return Clear().Append(_rhs); }
-		//! 
-		String& operator = (char _rhs) { return Clear().Append(_rhs); }
+		//!
+		String(const char* _str, int _length = -1) { Append(_str, _length); }
+		//!
+		String(const char* _start, const char* _end) { Append(_start, _end); }
+		//!
+		String(char _ch) { Append(_ch); }
+		//!
+		String(uint _count, char _ch) { Append(_count, _ch); }
+		//!
+		String(const char* _str1, int _length1, const char* _str2, int _length2);
+
+		//!
+		String& operator = (const String& _rhs);
+		//!
+		String& operator = (String&& _rhs);
+		//!
+		String& operator = (const char* _str);
+		//!
+		String& operator = (char _ch) { return Clear().Append(_ch); }
+
+		//!
+		char& operator [] (int _index) { ASSERT((uint)_index < m_length); return m_data[_index]; }
+		//!
+		char operator [] (int _index) const { ASSERT((uint)_index < m_length); return m_data[_index]; }
+		//!
+		char& At(uint _index) { ASSERT(_index < m_length); return m_data[_index]; }
+		//!
+		char At(uint _index) const { ASSERT(_index < m_length); return m_data[_index]; }
+
+		//!
+		operator const char* (void) const { return m_data; }
+		//!
+		char* Data(uint _offset = 0) { ASSERT(_offset <= m_length); return m_data + _offset; }
+		//!
+		const char* CStr(uint _offset = 0) const { ASSERT(_offset <= m_length); return m_data + _offset; }
+
+		//!
+		Iterator Begin(void) { return m_data; }
+		//!
+		ConstIterator Begin(void) const { return m_data; }
+		//!
+		Iterator End(void) { return m_data + m_length; }
+		//!
+		ConstIterator End(void) const { return m_data + m_length; }
+
+
+		//!
+		bool IsEmpty(void) const { return m_length == 0; }
+		//!
+		bool NonEmpty(void) const { return m_length != 0; }
+		//!
+		uint Length(void) const { return m_length; }
+		//!
+		uint Size(void) const { return m_length; }
+		//!
+		uint Capacity(void) const { return m_capacity; }
+		//!
+		String& Reserve(uint _maxLength);
+		//!
+		String& Resize(uint _newLength, char _ch = 0);
+		//!
+		String& Clear(void) { return Resize(0); }
+
 
 		//! 
 		String& operator += (const String& _rhs) { return Append(_rhs); }
@@ -1177,231 +1977,64 @@ namespace Reax
 		//! 
 		String& operator += (char _rhs) { return Append(_rhs); }
 		//! 
-		String operator + (const String& _rhs) const { return String(*this).Append(_rhs); }
+		String operator + (const String& _rhs) const { return String(m_data, m_length, _rhs.m_data, _rhs.m_length); }
 		//! 
-		String operator + (const char* _rhs) const { return String(*this).Append(_rhs); }
+		String operator + (const char* _rhs) const { return String(m_data, m_length, _rhs, -1); }
 		//! 
-		String operator + (char _rhs) const { return String(*this).Append(_rhs); }
+		String operator + (char _rhs) const { return String(m_data, m_length, &_rhs, 1); }
 		//!
-		friend String operator + (const char* _lhs, const String& _rhs) { return String(_lhs).Append(_rhs); }
+		friend String operator + (const char* _lhs, const String& _rhs) { return String(_lhs, -1, _rhs.m_data, _rhs.m_length); }
 		//!
-		friend String operator + (char _lhs, const String& _rhs) { return String(_lhs).Append(_rhs); }
-		
-		// [capasity]
+		friend String operator + (char _lhs, const String& _rhs) { return String(&_lhs, 1, _rhs.m_data, _rhs.m_length); }
 
 		//!
-		uint Size(void) const { return m_buffer->length; }
+		String& Append(const String& _str) { return Append(_str.m_data, _str.m_length); }
 		//!
-		uint Length(void) const { return m_buffer->length; }
+		String& Append(const char* _str, int _length = -1);
 		//!
-		uint RealLength(void) const { return Length(m_buffer->str); }
+		String& Append(const char* _start, const char* _end) { return Append(_start, (uint)(_end - _start)); }
 		//!
-		String& UpdateLength(void)  
-		{ 
-			m_buffer = m_buffer->Unique();
-			m_buffer->length = Length(m_buffer->str);
-		}
+		String& Append(char _ch);
 		//!
-		uint Capacity(void) const { return m_buffer->capacity; }
-		//! 
-		String& Clear(void)
-		{
-			if (m_buffer->IsShared())
-			{
-				m_buffer->Release();
-				m_buffer = Buffer::Null();
-			}
-			else
-			{
-				m_buffer->length = 0;
-				m_buffer->str[0] = 0;
-			}
-			return *this;
-		}
-		//!
-		String& Resize(uint _size, char _ch = 0)
-		{
-			if (m_buffer->length < _size)
-			{
-				Append(_size - m_buffer->length, _ch);
-			}
-			else if (m_buffer->length > _size)
-			{
-				m_buffer = m_buffer->Unique();
-				m_buffer->length = _size;
-				m_buffer->str[_size] = 0;
-			}
-			return *this;
-		}
-		//! 
-		String& Reserve(uint _size, bool _compact = true)
-		{
-			m_buffer = m_buffer->Reserve(_size, _compact);
-			return *this;
-		}
-		//!
-		String& Compact(void)
-		{
-			if (m_buffer->length != m_buffer->capacity)
-			{
-				Buffer* _newBuffer = Buffer::New(m_buffer->str, m_buffer->length);
-				m_buffer->Release();
-				m_buffer = _newBuffer;
-			}
-			return *this;
-		}
-		//!
-		String& Free(void)
-		{
-			if (m_buffer->capacity > 0)
-			{
-				m_buffer->Release();
-				m_buffer = Buffer::Null();
-			}
-			return *this;
-		}
-
-		// [access]
+		String& Append(uint _count, char _ch);
 
 		//!
-		operator const char* (void) const { return m_buffer->str; }
-		//! Read char.
-		const char operator [] (int _index) const
-		{
-			ASSERT((uint)_index <= m_buffer->length, "Invalid index");
-			return m_buffer->str[_index];
-		}
-		//! Modify char. \note It's not effective. Use String::Data instead.
-		char& operator () (int _index)
-		{
-			ASSERT((uint)_index <= m_buffer->length, "Invalid index");
-			if(m_buffer->IsShared())
-				m_buffer = m_buffer->Detach();
-			return m_buffer->str[_index];
-			//return Proxy(this, _index);
-		}
-
-		//! Get modifiable data.
-		char* Data(uint _offset = 0)
-		{
-			ASSERT(_offset <= m_buffer->length, "Invalid offset");
-			if (m_buffer->IsShared())
-				m_buffer = m_buffer->Detach();
-			return m_buffer->str + _offset;
-		}
-		//! Get constant data.
-		const char* CStr(uint _offset = 0) const
-		{ 
-			ASSERT(_offset <= m_buffer->length, "Invalid offset");
-			return m_buffer->str;
-		}
-		//! Get constant data.
-		const char* Ptr(uint _offset = 0) const { return CStr(_offset); }
+		bool operator == (const String& _rhs) const { return m_length == _rhs.m_length && Compare(m_data, _rhs.m_data) == 0; }
 		//!
-		char At(uint _index) const
-		{
-			ASSERT(_index <= m_buffer->length + 1, "Invalid index");
-			return m_buffer->str[_index];
-		}
+		bool operator == (const char* _rhs) const { return Compare(m_data, _rhs) == 0; }
 		//!
-		char Front(void) const { return m_buffer->str[0]; }
+		bool operator != (const String& _rhs) const { return !(*this == _rhs); }
 		//!
-		char Back(void) const { return m_buffer->length > 1 ? m_buffer->str[m_buffer->length - 1] : 0; }
-
-		// [iterators]
-
-
-		// [modifiers]
-
-		//! Append the string.
-		String& Append(const String& _str)
-		{
-			return Append(_str.m_buffer->str, _str.m_buffer->length);
-		}
-		//! Append the string.
-		String& Append(const char* _str, int _length = -1)
-		{
-			Buffer* _tmp = nullptr;
-			if (_str >= m_buffer->str && _str <= m_buffer->str + m_buffer->capacity)
-				_tmp = m_buffer->AddRef();
-
-			_length = Length(_str, _length);
-			m_buffer = m_buffer->Reserve(m_buffer->length + _length);
-			if (_length)
-			{
-				memcpy(m_buffer->str + m_buffer->length, _str, _length);
-				m_buffer->length += _length;
-				m_buffer->str[m_buffer->length] = 0;
-			}
-			if (_tmp)
-				_tmp->Release();
-
-			return *this;
-		}
-		//! Append the string range.
-		String Append(const char* _str, const char* _end)
-		{
-			ASSERT(_str <= _end);
-			return Append(_str, (int)(_end - _str));
-		}
-		//! Append the symbol.
-		String& Append(char _ch)
-		{
-			uint _length = m_buffer->length + 1;
-			m_buffer = m_buffer->Reserve(_length);
-			m_buffer->str[m_buffer->length] = _ch;
-			m_buffer->str[_length] = 0;
-			m_buffer->length = _length;
-			return *this;
-		}
-		//! Append the symbols.
-		String& Append(uint _count, char _ch)
-		{
-			if (_count)
-			{
-				uint _length = m_buffer->length + _count;
-				m_buffer = m_buffer->Reserve(_length);
-				memset(m_buffer->str + m_buffer->length, _ch, _count);
-				m_buffer->str[_length] = 0;
-				m_buffer->length = _length;
-			}
-			return *this;
-		}
+		bool operator != (const char* _rhs) const { return !(*this == _rhs); }
 		//!
-		String& SetChar(uint _index, char _ch)
-		{
-			ASSERT(_index <= m_buffer->length, "Invalid index");
-			m_buffer = m_buffer->Unique();
-			m_buffer->str[_index] = _ch;
-			return *this;
-		}
-
-		// [compare]
-
-		// [operations]
+		bool operator < (const char* _rhs) const { return Compare(m_data, _rhs) < 0; }
 		//!
-		String SubStr(uint _offset, int _length = -1) const
-		{
-			ASSERT(_length < 0 || (uint)(_offset + _length) <= m_buffer->length);
-			return String(m_buffer->str + _offset, _length);
-		}
-		// find
+		bool operator <= (const char* _rhs) const { return Compare(m_data, _rhs) <= 0; }
+		//!
+		bool operator > (const char* _rhs) const { return Compare(m_data, _rhs) > 0; }
+		//!
+		bool operator >= (const char* _rhs) const { return Compare(m_data, _rhs) >= 0; }
 
-		String& Lower(void)
-		{
-			m_buffer = m_buffer->Unique();
-			Lower(m_buffer->str, m_buffer->length);
-			return *this;
-		}
-		String& Upper(void)
-		{
-			m_buffer = m_buffer->Unique();
-			Upper(m_buffer->str, m_buffer->length);
-			return *this;
-		}
+		//!
+		String SubStr(uint _offset, int _length = -1) const;
+		//!
+		String Copy(void) const { return *this; }
+		//!
+		String& MakeLower(void) { Lower(m_data, m_length); return *this; }
+		//!
+		String& MakeUpper(void) { Upper(m_data, m_length); return *this; }
+		//!
+		String Lower(void) const { Copy().MakeLower(); }
+		//!
+		String Upper(void) const { Copy().MakeUpper(); }
+		//!
+		uint Hash(uint _hash = 0) const { return Hash(m_data, _hash); }
+		//!
+		uint IHash(uint _hash = 0) const { return IHash(m_data, _hash); }
 
 
-		// [C String utilities]
+		//!
+		static uint Length(const char* _str, int _length = -1) { return _str ? (uint)(_length < 0 ? strlen(_str) : _length) : 0; }
 
 		//!
 		static constexpr bool IsAlpha(char _ch) { return (_ch >= 'A' && _ch <= 'Z') || (_ch >= 'a' && _ch <= 'z') || ((uint8)_ch >= 0xc0); }
@@ -1415,447 +2048,30 @@ namespace Reax
 		static constexpr uint ConstIHash(const char* _str, uint _hash = 0) { return *_str ? ConstIHash(_str + 1, Lower(*_str) + (_hash << 6) + (_hash << 16) - _hash) : _hash; }
 
 		//!
-		static uint Length(const char* _str, int _length = -1)
-		{
-			return _str ? (uint)(_length < 0 ? strlen(_str) : _length) : 0;
-		}
+		static uint Hash(const char* _str, uint _hash = 0);
+		//!
+		static uint IHash(const char* _str, uint _hash = 0);
+		//!
+		static char* Lower(char* _str, int _length = -1);
+		//!
+		static char* Upper(char* _str, int _length = -1);
 
 		//!
-		static char* Lower(char* _str, int _length = -1)
-		{
-			ASSERT(_length < (int)Length(_str, _length));
-			for (const char* _end = _str + Length(_str, _length); _str < _end; ++_str)
-				*_str = Lower(*_str);
-			return _str;
-		}
-		//!
-		static char* Upper(char* _str, int _length = -1)
-		{
-			ASSERT(_length < (int)Length(_str, _length));
-			for (const char* _end = _str + Length(_str, _length); _str < _end; ++_str)
-				*_str = Upper(*_str);
-			return _str;
-		}
-
-
+		static int Compare(const char* _lhs, const char* _rhs, bool _ignoreCase = false);
 
 		//!
-		static int Compare(const char* _lhs, const char* _rhs, bool _ignoreCase = false)
-		{
-			_lhs = _lhs ? _lhs : "";
-			_rhs = _rhs ? _rhs : "";
-			if (_ignoreCase)
-			{
-				while (*_lhs && Lower(*_lhs++) == Upper(*_rhs++));
-				return *_lhs - *_rhs;
-			}
-			return strcmp(_lhs, _rhs);
-		}
+		static String Format(const char* _fmt, ...);
+		//!
+		static String FormatV(const char* _fmt, va_list _args);
 
 		//!
-		static String Format(const char* _fmt, ...)
-		{
-			va_list _args;
-			va_start(_args, _fmt);
-			String _str = FormatV(_fmt, _args);
-			va_end(_args);
-			return _str;
-		}
+		static bool Match(const char* _str, const char* _pattern, bool _ignoreCase = true);
 		//!
-		static String FormatV(const char* _fmt, va_list _args)
-		{
-#if 0
-			char _buff[4096];
-			vsnprintf_s(_buff, sizeof(_buff), _fmt, _args);
-			return _buff;
-#else
-			//this code from ptypes: pputf.cxx
-			struct
-			{
-				bool operator () (char _ch) const
-				{
-					return strchr(" #+-~.0123456789", _ch) != 0;
-				}
-			} _check_fmtopts;
-			enum fmt_type_t { FMT_NONE, FMT_CHAR, FMT_SHORT, FMT_INT, FMT_LONG, FMT_LARGE, FMT_STR, FMT_PTR, FMT_DOUBLE, FMT_LONG_DOUBLE };
-
-			String _res;
-			fmt_type_t fmt_type;
-			const char *e, *p = _fmt;
-			char buf[4096], fbuf[128];
-			while (p && *p != 0)
-			{
-				// write out raw data between format specifiers
-				e = strchr(p, '%');
-				if (e == 0)
-					e = p + strlen(p);
-				if (e > p)
-					_res.Append(p, e);
-				if (*e != '%')
-					break;
-				if (*++e == '%') // write out a single '%' 
-				{
-					_res += '%';
-					p = e + 1;
-					continue;
-				}
-
-
-				// build a temporary buffer for the conversion specification
-				fbuf[0] = '%';
-				char* f = fbuf + 1;
-				bool modif = false;
-
-				// formatting flags and width specifiers
-				while (_check_fmtopts(*e) && uint(f - fbuf) < sizeof(fbuf) - 5)
-					*f++ = *e++, modif = true;
-
-				// prefixes
-				switch (*e)
-				{
-				case 'h':
-					fmt_type = FMT_SHORT;
-					*f++ = *e++;
-					break;
-
-				case 'L':
-					fmt_type = FMT_LONG_DOUBLE;
-					*f++ = *e++;
-					break;
-
-				case 'l':
-				{
-					if (*++e == 'l')
-					{
-#                   if defined(_MSC_VER) || defined(__BORLANDC__)
-						*f++ = 'I'; *f++ = '6'; *f++ = '4';
-#                   else
-						*f++ = 'l'; *f++ = 'l';
-#                   endif
-						++e;
-						fmt_type = FMT_LARGE;
-					}
-					else
-					{
-						*f++ = 'l';
-						fmt_type = FMT_LONG;
-						// x64 ?
-					}
-				} break;
-
-				default:
-					fmt_type = FMT_NONE;
-					break;
-				};
-
-				// format specifier
-				switch (*e)
-				{
-				case 'c':
-					fmt_type = FMT_CHAR;
-					*f++ = *e++;
-					break;
-
-				case 'd':
-				case 'i':
-				case 'o':
-				case 'u':
-				case 'x':
-				case 'X':
-					if (fmt_type < FMT_SHORT || fmt_type > FMT_LARGE)
-						fmt_type = FMT_INT;
-					*f++ = *e++;
-					break;
-
-				case 'e':
-				case 'E':
-				case 'f':
-				case 'g':
-				case 'G':
-					if (fmt_type != FMT_LONG_DOUBLE)
-						fmt_type = FMT_DOUBLE;
-					*f++ = *e++;
-					break;
-
-				case 's':
-					fmt_type = FMT_STR;
-					*f++ = *e++;
-					break;
-
-				case 'p':
-					fmt_type = FMT_PTR;
-					*f++ = *e++;
-					break;
-				};
-				if (fmt_type == FMT_NONE)
-					break;
-				*f = 0;
-
-				// some formatters are processed here 'manually', while others are passed to snprintf
-				int s = 0;
-				switch (fmt_type)
-				{
-				case FMT_NONE: // to avoid compiler warning 
-					break;
-				case FMT_CHAR:
-					if (modif)
-						s = _snprintf(buf, sizeof(buf), fbuf, va_arg(_args, int));
-					else
-						_res += (char)(va_arg(_args, int));
-					break;
-
-				case FMT_SHORT:
-					s = _snprintf(buf, sizeof(buf), fbuf, va_arg(_args, int));
-					break;
-
-				case FMT_INT:
-					s = _snprintf(buf, sizeof(buf), fbuf, va_arg(_args, int));
-					break;
-
-				case FMT_LONG:
-					s = _snprintf(buf, sizeof(buf), fbuf, va_arg(_args, long));
-					break;
-
-				case FMT_LARGE:
-					s = _snprintf(buf, sizeof(buf), fbuf, va_arg(_args, int64));
-					break;
-
-				case FMT_STR:
-				{
-					if (modif)
-						s = _snprintf(buf, sizeof(buf), fbuf, va_arg(_args, const char*));
-					else
-					{
-						const char* _str = va_arg(_args, const char*);
-						if (_str)
-							_res += _str;
-						//else _res += "<null>";
-					}
-				}break;
-
-				case FMT_PTR:
-					s = _snprintf(buf, sizeof(buf), fbuf, va_arg(_args, void*));
-					break;
-				case FMT_DOUBLE:
-
-					s = _snprintf(buf, sizeof(buf), fbuf, va_arg(_args, double));
-					for (; s > 0; --s)
-					{
-						if (buf[s - 1] == '0')
-							buf[s - 1] = 0;
-						else if (buf[s - 1] == '.')
-						{
-							buf[--s] = 0;
-							break;
-						}
-						else
-							break;
-					}
-					break;
-
-				case FMT_LONG_DOUBLE:
-					s = _snprintf(buf, sizeof(buf), fbuf, va_arg(_args, long double));
-					break;
-				}
-
-				if (s > 0)
-					_res.Append(buf, s);
-
-				p = e;
-			}
-			return _res;
-#endif
-		}
-
+		static const char* Find(const char* _str1, const char* _str2, bool _ignoreCase = false);
 		//!
-		static bool Match(const char* _str, const char* _pattern, bool _ignoreCase = true)
-		{
-			// '*' - any symbols sequence
-			// ' '(space) - any number of spaces
-			// '['charset']' - set of symbols
-			// '['lower'-'upper']' - range of symbols
-			// "file.ext" matched "*.ext"
-
-			if (!_str || !_str[0])
-				return false;
-			if (!_pattern || !_pattern[0])
-				return false;
-
-			Array<Pair<const char*, const char*>> _stack; // <string, pattern>
-			_stack.Push({ _str, _pattern });
-			for (const char *_s = _str, *_p = _pattern;;)
-			{
-			$_frame:
-				if (*_p == 0 && *_s == 0)
-					goto $_true;
-				if (*_s == 0 && *_p != '*')
-					goto $_false;
-				if (*_p == '*') // подстановка
-				{
-					++_p;
-					if (*_p == 0) goto $_true;
-					for (;; )
-					{
-						_stack.Back().first = _s;
-						_stack.Back().second = _p;
-						_stack.Push({ _s, _p });
-						goto $_frame;
-					$_xmatch_true:
-						goto $_true;
-					$_xmatch_false:
-						if (*_s == 0) 
-							goto $_false;
-						++_s;
-					}
-				}
-				if (*_p == '?') // любой символ 
-					goto $_match;
-				if (*_p == ' ') // любое количество пробелов
-				{
-					if (*_s == ' ')
-					{
-						for (; _p[1] == ' '; ++_p);
-						for (; _s[1] == ' '; ++_s);
-						goto $_match;
-					}
-					goto $_false;
-				}
-				if (*_p == '[') // набор символов
-				{
-					for (++_p; ; )
-					{
-						if (*_p == ']' || *_p == 0)
-							goto $_false;
-						if (*_p == '\\') // управл€ющий символ
-						{
-							if (_p[1] == '[' || _p[1] == ']' || _p[1] == '\\')
-								++_p;
-						}
-						if (_ignoreCase ? (Lower(*_p) == Lower(*_s)) : (*_p == *_s))
-							break;
-
-						if (_p[1] == '-') // диапазон
-						{
-							if (!_p[2])
-								goto $_false;
-							if (_ignoreCase)
-							{
-								char l = Lower(*_s);
-								char u = Upper(*_s);
-								if (_p[0] <= l && _p[2] >= l)
-									break;
-								if (_p[0] >= l && _p[2] <= l)
-									break;
-								if (_p[0] <= u && _p[2] >= u)
-									break;
-								if (_p[0] >= u && _p[2] <= u)
-									break;
-							}
-							else
-							{
-								if (_p[0] <= *_s && _p[2] >= *_s)
-									break;
-								if (_p[0] >= *_s && _p[2] <= *_s)
-									break;
-							}
-							_p += 2;
-						}
-						++_p;
-					}
-					while (*_p != ']')
-					{
-						if (*_p == '\\' && (_p[1] == '[' || _p[1] == ']' || _p[1] == '\\')) // управл€ющий символ
-							++_p;
-						if (*_p == 0)
-						{
-							--_p;
-							break;
-						}
-						++_p;
-					}
-					goto $_match;
-				}
-				if (*_p == '\\' && (_p[1] == '[' || _p[1] == ']' || _p[1] == '\\')) // управл€ющий символ
-					++_p;
-				if (_ignoreCase ? (Lower(*_p) != Lower(*_s)) : (*_p != *_s))
-					goto $_false;
-
-			$_match:
-				++_p;
-				++_s;
-				continue;
-			$_true:
-				if (_stack.Size() > 1)
-				{
-					_stack.Pop();
-					_s = _stack.Back().first;
-					_p = _stack.Back().second;
-					goto $_xmatch_true;
-				}
-				return true;
-			$_false:
-				if (_stack.Size() > 1)
-				{
-					_stack.Pop();
-					_s = _stack.Back().first;
-					_p = _stack.Back().second;
-					goto $_xmatch_false;
-				}
-				break;
-			}
-			return false;
-		}
-		
+		static char* Find(char* _str1, const char* _str2, bool _ignoreCase = false);
 		//!
-		static const char* Find(const char* _str1, const char* _str2, bool _ignoreCase = false)
-		{
-			_str1 = _str1 ? _str1 : "";
-			_str2 = _str2 ? _str2 : "";
-			if (_ignoreCase)
-			{
-				for (; *_str1; *_str1++)
-				{
-					for (const char *a = _str1, *b = _str2; Lower(*a++) == Lower(*b++);)
-					{
-						if (!*b)
-							return _str1;
-					}
-				}
-				return nullptr;
-			}
-			return strstr(_str1, _str2);
-		}
-		TODO_EX("String", "Add ReverseFind");
-
-		
-		//!
-		static void Split(const char* _str, const char* _delimiters, Array<String>& _dst)
-		{
-			if (_str)
-			{
-				const char* _end = _str;
-				if (_delimiters)
-				{
-					while (*_str)
-					{
-						while (*_str && strchr(_delimiters, *_str))
-							++_str;
-						_end = _str;
-						while (*_end && !strchr(_delimiters, *_end))
-							++_end;
-						if (_str != _end)
-							_dst.Push(String(_str, _end));
-						_str = _end;
-					}
-				}
-				else
-					_end = _str + strlen(_str);
-				if (_str != _end)
-					_dst.Push(String(_str, _end));
-			}
-		}
-
-
+		static void Split(const char* _str, const char* _delimiters, Array<String>& _dst);
 
 		static const String Empty;
 
@@ -1865,13 +2081,47 @@ namespace Reax
 		template <class T> friend String operator - (const T&, const String&) = delete;
 
 	protected:
-		Buffer* m_buffer = nullptr;
+		uint m_length = 0;
+		uint m_capacity = 0;
+		char* m_data = nullptr;
 	};
 
+	//!
+	inline uint MakeHash(const String& _value) { return _value.Hash(); }
+
+	//!
+	inline auto begin(String& _str)->decltype(_str.Begin()) { return _str.Begin(); }
+	//!
+	inline auto begin(const String& _str)->decltype(_str.Begin()) { return _str.Begin(); }
+	//!
+	inline auto end(String& _str)->decltype(_str.End()) { return _str.End(); }
+	//!
+	inline auto end(const String& _str)->decltype(_str.End()) { return _str.End(); }
+
+	//----------------------------------------------------------------------------//
+	// WString
+	//----------------------------------------------------------------------------//
+
+	//! Unicode string. \ingroup String
+	class RX_API WString
+	{
+	public:
+
+
+	protected:
+		uint m_length = 0;
+		uint m_capacity = 0;
+		wchar_t* m_data = nullptr;
+	};
+
+	//!\} String
 
 	//----------------------------------------------------------------------------//
 	// Atomic
 	//----------------------------------------------------------------------------//
+
+	//!\addtogroup Concurrency
+	//!\{
 
 	enum class MemoryOrder
 	{
@@ -2092,6 +2342,8 @@ namespace Reax
 		mutable T* m_value;
 	};
 
+	//!\} Concurrency
+
 	//----------------------------------------------------------------------------//
 	// SpinLock
 	//----------------------------------------------------------------------------//
@@ -2100,12 +2352,206 @@ namespace Reax
 	// Math
 	//----------------------------------------------------------------------------//
 
+	//!\addtogroup Math
+	//!\{
 
+	typedef float float32;
+	typedef struct half float16;
+	typedef double float64;
+
+	static const float EPSILON = 1e-6f;
+	static const float EPSILON2 = 1e-12f;
+	static const float PI = 3.1415926535897932384626433832795f;
+	static const float DEGREES = 57.295779513082320876798154814105f;
+	static const float RADIANS = 0.01745329251994329576923690768489f;
+
+	//! Get minimum value
+	template <typename T> const T& Min(const T& _a, const T& _b) { return _a < _b ? _a : _b; }
+	//! Get minimum value
+	template <typename T> const T& Min(const T& _a, const T& _b, const T& _c) { return _a < _b ? (_a < _c ? _a : _c) : (_b < _c ? _b : _c); }
+	//! Get maximum value
+	template <typename T> const T& Max(const T& _a, const T& _b) { return _a > _b ? _a : _b; }
+	//! Get maximum value
+	template <typename T> const T& Max(const T& _a, const T& _b, const T& _c) { return _a > _b ? (_a > _c ? _a : _c) : (_b > _c ? _b : _c); }
+	//! 
+	template <typename T> const T Clamp(T _x, T _l, T _u) { return _x > _l ? (_x < _u ? _x : _u) : _l; }
+	//! 
+	template <typename T> const T Clamp01(T _x, T _l, T _u) { return Clamp<T>(_x, T(0), T(1)); }
+	//! Linear interpolation
+	template <typename T> T Mix(const T& _a, const T& _b, float _t) { return _a + (_b - _a) * _t; }
+	//! 
+	template <typename T> T Abs(T _x) { return abs(_x); }
+	//! 
+	template <typename T> T Radians(T _degrees) { return _degrees * RADIANS; }
+	//! 
+	template <typename T> T Degrees(T _radians) { return _radians * DEGREES; }
+	//! 
+	template <typename T> T Sqr(T _x) { return _x * _x; }
+
+
+	//! 
+	inline float Sqrt(float _x) { return sqrt(_x); }
+	//! 
+	inline float RSqrt(float _x) 
+	{ 
+		TODO("Use asm");
+		return 1 / sqrt(_x);
+	}
+	//! 
+	inline float Sin(float _x) { return sin(_x); }
+	//! 
+	inline float Cos(float _x) { return cos(_x); }
+	//! 
+	inline void SinCos(float _a, float& _s, float& _c)
+	{ 
+		TODO("Use asm");
+		_s = sin(_a), _c = cos(_a);
+	}
+	//! 
+	inline float Tan(float _x) { return tan(_x); }
+	//! 
+	inline float ASin(float _x) { return asin(_x); }
+	//! 
+	inline float ACos(float _x) { return acos(_x); }
+	//! 
+	inline float ATan2(float _y, float _x) { return atan2(_y, _x); }
+	//! 
+	inline float Log2(float _x) { return log2(_x); }
+	//! 
+	inline int Log2i(int _x) { return (int)log2f((float)_x); }
+
+	//! 
+	inline uint FirstPow2(uint _val)
+	{
+		--_val |= _val >> 16;
+		_val |= _val >> 8;
+		_val |= _val >> 4;
+		_val |= _val >> 2;
+		_val |= _val >> 1;
+		return ++_val;
+	}
+	//! 
+	inline bool IsPow2(uint _val) { return (_val & (_val - 1)) == 0; }
+	//! 
+	inline uint8 FloatToByte(float _value) { return (uint8)(_value * 0xff); }
+	//! 
+	inline float ByteToFloat(uint8 _value) { return (float)(_value * (1.0f / 255.0f)); }
+	//! 
+	inline uint16 FloatToHalf(float _value)
+	{
+		union { float f; uint i; }_fb = { _value };
+#	ifdef _FAST_HALF_FLOAT
+		return (uint16)((_fb.i >> 16) & 0x8000) | ((((_fb.i & 0x7f800000) - 0x38000000) >> 13) & 0x7c00) | ((_fb.i >> 13) & 0x03ff);
+#	else
+		uint _s = (_fb.i >> 16) & 0x00008000; // sign
+		int _e = ((_fb.i >> 23) & 0x000000ff) - 0x00000070; // exponent
+		uint _r = _fb.i & 0x007fffff; // mantissa
+		if (_e < 1)
+		{
+			if (_e < -10)
+				return 0;
+			_r = (_r | 0x00800000) >> (14 - _e);
+			return (uint16)(_s | _r);
+		}
+		else if (_e == 0x00000071)
+		{
+			if (_r == 0)
+				return (uint16)(_s | 0x7c00); // Inf
+			else
+				return (uint16)(((_s | 0x7c00) | (_r >>= 13)) | (_r == 0)); // NAN
+		}
+		if (_e > 30)
+			return (uint16)(_s | 0x7c00); // Overflow
+		return (uint16)((_s | (_e << 10)) | (_r >> 13));
+#	endif
+	}
+	//! 
+	inline float HalfToFloat(uint16 _value)
+	{
+		union { uint i; float f; }_fb;
+#	ifdef _FAST_HALF_FLOAT
+		_fb.i = ((_value & 0x8000) << 16) | (((_value & 0x7c00) + 0x1C000) << 13) | ((_value & 0x03FF) << 13);
+#	else
+		register int _s = (_value >> 15) & 0x00000001; // sign
+		register int _e = (_value >> 10) & 0x0000001f; // exponent
+		register int _r = _value & 0x000003ff; // mantissa
+		if (_e == 0)
+		{
+			if (_r == 0) // Plus or minus zero
+			{
+				_fb.i = _s << 31;
+				return _fb.f;
+			}
+			else // Denormalized number -- renormalize it
+			{
+				for (; !(_r & 0x00000400); _r <<= 1, _e -= 1);
+				_e += 1;
+				_r &= ~0x00000400;
+			}
+		}
+		else if (_e == 31)
+		{
+			if (_r == 0) // Inf
+			{
+				_fb.i = (_s << 31) | 0x7f800000;
+				return _fb.f;
+			}
+			else // NaN
+			{
+				_fb.i = ((_s << 31) | 0x7f800000) | (_r << 13);
+				return _fb.f;
+			}
+		}
+		_e = (_e + 112) << 23;
+		_r = _r << 13;
+		_fb.i = ((_s << 31) | _e) | _r;
+#	endif
+		return _fb.f;
+	}
+	//! 
+	inline float FixedToFloat(uint _value, uint _bits, float _default = 0.0f)
+	{
+		if (_bits > 31)
+			_bits = 31;
+		return _bits ? ((float)_value) / ((float)((1u << _bits) - 1u)) : _default;
+	}
+	//! 
+	inline uint FloatToFixed(float _value, uint _bits)
+	{
+		if (_bits > 31)
+			_bits = 31;
+		if (_value <= 0)
+			return 0;
+		if (_value >= 1)
+			return (1u << _bits) - 1u;
+		return static_cast<uint>(_value * (float)(1u << _bits));
+	}
+	//! 
+	inline uint FixedToFixed(uint _value, uint _from, uint _to)
+	{
+		if (_from > 31)
+			_from = 31;
+		if (_to > 31)
+			_to = 31;
+		if (_from > _to)
+			_value >>= _from - _to;
+		else if (_from < _to && _value != 0)
+		{
+			uint _max = (1u << _from) - 1u;
+			if (_value == _max)
+				_value = (1u << _to) - 1u;
+			else if (_max > 0)
+				_value *= (1u << _to) / _max;
+			else _value = 0;
+		}
+		return _value;
+	}
 
 	//----------------------------------------------------------------------------//
 	// 
 	//----------------------------------------------------------------------------//
 
+	//! IntVector2
 	struct IntVector2
 	{
 		union
@@ -2119,6 +2565,7 @@ namespace Reax
 	// 
 	//----------------------------------------------------------------------------//
 
+	//! IntVector3
 	struct IntVector3
 	{
 		union
@@ -2132,6 +2579,7 @@ namespace Reax
 	// 
 	//----------------------------------------------------------------------------//
 
+	//! IntVector4
 	struct IntVector4
 	{
 		union
@@ -2145,6 +2593,7 @@ namespace Reax
 	// 
 	//----------------------------------------------------------------------------//
 
+	//! Vector2 
 	struct Vector2
 	{
 		union
@@ -2158,6 +2607,7 @@ namespace Reax
 	// 
 	//----------------------------------------------------------------------------//
 
+	//! Vector3
 	struct Vector3
 	{
 		union
@@ -2171,6 +2621,7 @@ namespace Reax
 	// 
 	//----------------------------------------------------------------------------//
 
+	//! Vector4
 	struct Vector4
 	{
 		union
@@ -2184,6 +2635,7 @@ namespace Reax
 	// 
 	//----------------------------------------------------------------------------//
 
+	//! Quaternion
 	struct Quaternion
 	{
 		union
@@ -2197,6 +2649,7 @@ namespace Reax
 	// 
 	//----------------------------------------------------------------------------//
 
+	//! Matrix3x4
 	struct Matrix3x4
 	{
 		union
@@ -2216,6 +2669,7 @@ namespace Reax
 	// 
 	//----------------------------------------------------------------------------//
 
+	//! Matrix4x4
 	struct Matrix4x4
 	{
 		union
@@ -2236,6 +2690,7 @@ namespace Reax
 	//
 	//----------------------------------------------------------------------------//
 
+	//! Ray
 	struct Ray
 	{
 		Vector3 origin, dir;
@@ -2245,6 +2700,7 @@ namespace Reax
 	//
 	//----------------------------------------------------------------------------//
 
+	//! Plane
 	struct Plane
 	{
 		Vector3 normal;
@@ -2255,6 +2711,7 @@ namespace Reax
 	//
 	//----------------------------------------------------------------------------//
 
+	//! AlignedBox
 	struct AlignedBox
 	{
 		Vector3 mn, mx;
@@ -2264,6 +2721,7 @@ namespace Reax
 	//
 	//----------------------------------------------------------------------------//
 
+	//! Frustum
 	struct Frustum
 	{
 		Plane planes[6];
@@ -2273,6 +2731,7 @@ namespace Reax
 	//
 	//----------------------------------------------------------------------------//
 
+	//! Dynamic bounding-volumes tree node
 	struct DbvNode
 	{
 		AlignedBox bounds;
@@ -2292,6 +2751,7 @@ namespace Reax
 	//
 	//----------------------------------------------------------------------------//
 
+	//! Dynamic bounding-volumes tree
 	class DbvTree
 	{
 	public:
@@ -2304,5 +2764,7 @@ namespace Reax
 	//----------------------------------------------------------------------------//
 	//
 	//----------------------------------------------------------------------------//
+	
+	//!\} Math
 }
 

@@ -1,7 +1,82 @@
 <?xml version="1.0" encoding="utf-8"?>
 <AutoVisualizer xmlns="http://schemas.microsoft.com/vstudio/debugger/natvis/2010">
 
-  <Type Name="Reax::StringBuffer&lt;*&gt;">
+  <Type Name="Reax::ArrayIterator&lt;*&gt;">
+    <DisplayString>{*m_ptr}</DisplayString>
+  </Type>
+  
+  <Type Name="Reax::Array&lt;*&gt;">
+    <DisplayString>{{ size={m_capacity} }}</DisplayString>
+    <Expand>
+      <Item Name="[capacity]" ExcludeView="simple">(m_capacity)</Item>
+      <ArrayItems>
+        <Size>m_size</Size>
+        <ValuePointer>m_data</ValuePointer>
+     </ArrayItems>
+    </Expand>
+  </Type>
+  
+  <Type Name="Reax::ListIterator&lt;*&gt;">
+    <DisplayString>{m_ptr[0]}</DisplayString>
+  </Type>
+  
+  <Type Name="Reax::List&lt;*&gt;::Node">
+    <DisplayString>{m_value}</DisplayString>
+  </Type>
+ 
+  <Type Name="Reax::List&lt;*&gt;">
+    <DisplayString>{{ size={m_size} }}</DisplayString>
+    <Expand>
+      <LinkedListItems>
+        <Size>m_size</Size>
+        <HeadPointer>m_tail.m_next</HeadPointer>
+        <NextPointer>m_next</NextPointer>
+        <ValueNode>m_value</ValueNode>
+      </LinkedListItems>
+    </Expand>
+  </Type>
+  
+  <Type Name="Reax::Pair&lt;*,*&gt;">
+    <DisplayString>{{{first}, {second}}}</DisplayString>
+    <Expand>
+      <Item Name="[first]" ExcludeView="simple">(first)</Item>
+      <Item Name="[second]" ExcludeView="simple">(second)</Item>
+    </Expand>
+  </Type>
+  
+  <Type Name="Reax::HashMap&lt;*,*&gt;::Node">
+    <DisplayString>{m_value}</DisplayString>
+  </Type>
+  
+  <Type Name="Reax::HashMap&lt;*,*&gt;">
+    <DisplayString>{{ size={m_size} }}</DisplayString>
+    <Expand>
+       <Item Name="[bucket count]" ExcludeView="simple">(m_numBuckets)</Item>
+     <LinkedListItems>
+        <Size>m_size</Size>
+        <HeadPointer>m_tail.m_next</HeadPointer>
+        <NextPointer>m_next</NextPointer>
+        <ValueNode>m_value</ValueNode>
+      </LinkedListItems>
+    </Expand>
+  </Type>
+
+ 
+    <!--Type Name="std::list&lt;*&gt;">
+      <DisplayString>{{ size={_Mypair._Myval2._Mysize} }}</DisplayString>
+      <Expand>
+          <Item Name="[allocator]" ExcludeView="simple">_Mypair</Item>
+          <LinkedListItems>
+              <Size>_Mypair._Myval2._Mysize</Size>
+              <HeadPointer>_Mypair._Myval2._Myhead-&gt;_Next</HeadPointer>
+              <NextPointer>_Next</NextPointer>
+              <ValueNode>_Myval</ValueNode>
+          </LinkedListItems>
+      </Expand>
+  </Type-->
+
+  
+  <!--Type Name="Reax::StringBuffer&lt;*&gt;">
     <DisplayString>{str}</DisplayString>
     <StringView>str</StringView>
     <Expand>
@@ -41,20 +116,20 @@
         <ValuePointer>str</ValuePointer>
       </ArrayItems>
     </Expand>
-  </Type>
+  </Type-->
 
   <Type Name="Reax::String;">
-    <DisplayString>{m_buffer->str,na}</DisplayString>
-    <StringView>m_buffer->str,na</StringView>
+    <DisplayString>{m_data,na}</DisplayString>
+    <StringView>m_data,na</StringView>
     <Expand>
-      <Item Name="[length]" ExcludeView="simple">m_buffer->length</Item>
-      <Item Name="[capacity]" ExcludeView="simple">m_buffer->capacity</Item>
-      <Item Name="[refs]" ExcludeView="simple">m_buffer->refs</Item>
-      <Item Name="[str]" ExcludeView="simple">m_buffer->str</Item>
+      <Item Name="[length]" ExcludeView="simple">m_length</Item>
+      <Item Name="[capacity]" ExcludeView="simple">m_capacity</Item>
+      <Item Name="[str]" ExcludeView="simple">m_data</Item>
       <ArrayItems IncludeView="expanded">
-        <Size>m_buffer->length</Size>
-        <ValuePointer>m_buffer->str</ValuePointer>
+        <Size>m_length</Size>
+        <ValuePointer>m_data</ValuePointer>
       </ArrayItems>
     </Expand>
   </Type>
+
 </AutoVisualizer>
