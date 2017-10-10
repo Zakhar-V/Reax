@@ -1,49 +1,58 @@
 ﻿<?xml version="1.0" encoding="utf-8"?>
 <Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
   <ItemGroup>
-    <Filter Include="Файлы исходного кода">
-      <UniqueIdentifier>{4FC737F1-C7A5-4376-A066-2A32D752A2FF}</UniqueIdentifier>
-      <Extensions>cpp;c;cc;cxx;def;odl;idl;hpj;bat;asm;asmx</Extensions>
+    <Filter Include="Engine">
+      <UniqueIdentifier>{2212460f-4ed5-46cf-8a9f-90eec9a87c20}</UniqueIdentifier>
     </Filter>
-    <Filter Include="Заголовочные файлы">
-      <UniqueIdentifier>{93995380-89BD-4b04-88EB-625FBE52EBFB}</UniqueIdentifier>
-      <Extensions>h;hh;hpp;hxx;hm;inl;inc;xsd</Extensions>
+    <Filter Include="Engine\Base">
+      <UniqueIdentifier>{4e460415-d294-422a-9a76-0a7692c92444}</UniqueIdentifier>
     </Filter>
-    <Filter Include="Файлы ресурсов">
-      <UniqueIdentifier>{67DA6AB6-F800-4c08-8B7A-83BB121AAD01}</UniqueIdentifier>
-      <Extensions>rc;ico;cur;bmp;dlg;rc2;rct;bin;rgs;gif;jpg;jpeg;jpe;resx;tiff;tif;png;wav;mfcribbon-ms</Extensions>
+    <Filter Include="Engine\Core">
+      <UniqueIdentifier>{cf1c1f57-86ca-4fa6-b5b2-1a4450747723}</UniqueIdentifier>
     </Filter>
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="Core.hpp">
-      <Filter>Заголовочные файлы</Filter>
+    <ClInclude Include="Common.hpp">
+      <Filter>Engine\Base</Filter>
     </ClInclude>
-    <ClInclude Include="Engine.hpp">
-      <Filter>Заголовочные файлы</Filter>
+    <ClInclude Include="String.hpp">
+      <Filter>Engine\Base</Filter>
     </ClInclude>
-    <ClInclude Include="Base.hpp">
-      <Filter>Заголовочные файлы</Filter>
+    <ClInclude Include="Math.hpp">
+      <Filter>Engine\Base</Filter>
+    </ClInclude>
+    <ClInclude Include="Concurrency.hpp">
+      <Filter>Engine\Base</Filter>
+    </ClInclude>
+    <ClInclude Include="RefCounting.hpp">
+      <Filter>Engine\Base</Filter>
+    </ClInclude>
+    <ClInclude Include="Container.hpp">
+      <Filter>Engine\Base</Filter>
+    </ClInclude>
+    <ClInclude Include="Debug.hpp">
+      <Filter>Engine\Base</Filter>
+    </ClInclude>
+    <ClInclude Include="Object.hpp">
+      <Filter>Engine\Core</Filter>
     </ClInclude>
   </ItemGroup>
   <ItemGroup>
-    <ClCompile Include="Core.cpp">
-      <Filter>Файлы исходного кода</Filter>
+    <ClCompile Include="Debug.cpp">
+      <Filter>Engine\Base</Filter>
     </ClCompile>
-    <ClCompile Include="Engine.cpp">
-      <Filter>Файлы исходного кода</Filter>
+    <ClCompile Include="String.cpp">
+      <Filter>Engine\Base</Filter>
     </ClCompile>
-    <ClCompile Include="Base.cpp">
-      <Filter>Файлы исходного кода</Filter>
-    </ClCompile>
+  </ItemGroup>
+  <ItemGroup>
+    <Natvis Include="Engine.natvis">
+      <Filter>Engine</Filter>
+    </Natvis>
   </ItemGroup>
   <ItemGroup>
     <Text Include="Tasks.txt">
-      <Filter>Файлы ресурсов</Filter>
+      <Filter>Engine</Filter>
     </Text>
-  </ItemGroup>
-  <ItemGroup>
-    <Natvis Include="Base.natvis">
-      <Filter>Заголовочные файлы</Filter>
-    </Natvis>
   </ItemGroup>
 </Project>

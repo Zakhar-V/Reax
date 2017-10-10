@@ -17,7 +17,7 @@
   </Type>
   
   <Type Name="Reax::ListIterator&lt;*&gt;">
-    <DisplayString>{m_ptr[0]}</DisplayString>
+    <DisplayString>{m_ptr[0].m_value}</DisplayString>
   </Type>
   
   <Type Name="Reax::List&lt;*&gt;::Node">

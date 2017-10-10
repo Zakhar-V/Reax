@@ -1,187 +1,15 @@
-#include <Base.hpp>
+#include <Container.hpp>
+#include <Concurrency.hpp>
+#include <String.hpp>
+#include <Object.hpp>
 #include <stdio.h>
 #include <stdlib.h>
 
+#include <memory>
 #include <vector>
 #include <list>
 namespace Reax
 {
-	template <class T> class WeakRef;
-
-	class RefCounted : public NonCopyable
-	{
-	public:
-		//!
-		struct WRef : public NonCopyable
-		{
-		public:
-			//!
-			void AddRef(void) { AtomicAdd(m_refCount, 1); }
-			//!
-			void Release(void)
-			{
-				if (AtomicSubtract(m_refCount, 1) == 1)
-					delete this;
-			}
-			//!
-			RefCounted* _Lock(void)
-			{ 
-				RefCounted* _object = AtomicGet(m_object, MemoryOrder::Relaxed);
-				if (_object)
-					_object->AddRef();
-				return _object;
-			}
-
-		private:
-			friend class RefCounted;
-			//!
-			WRef(RefCounted* _obj) : m_object(_obj) { }
-			//!
-			void _Reset(void)
-			{
-				AtomicSet(m_object, nullptr);
-				Release();
-			}
-
-			int m_refCount = 1;
-			RefCounted* m_object;
-		};
-
-		virtual ~RefCounted(void)
-		{
-			ASSERT(m_refCount == 0);
-			ASSERT(m_weakRef == nullptr);
-		}
-		void AddRef(void) { AtomicAdd(m_refCount, 1); }
-		void Release(void)
-		{
-			if (AtomicSubtract(m_refCount, 1) == 1)
-			{
-				_DeleteThis();
-			}
-		}
-		
-		WRef* _GetWeakRef(void)
-		{
-			if (!m_weakRef)
-				m_weakRef = new WRef(this);
-			return m_weakRef;
-		}
-		
-	protected:
-		virtual void _DeleteThis(void)
-		{
-			_ReleaseWeakRef();
-			delete this;
-		}
-
-		void _ReleaseWeakRef(void)
-		{
-			if (m_weakRef)
-			{
-				m_weakRef->_Reset();
-				m_weakRef = nullptr;
-			}
-		}
-
-		WRef* m_weakRef = nullptr;
-		int m_refCount = 0;
-	};
-
-	//!
-	template<class T> T* AddRef(T* _ptr)
-	{
-		if (_ptr)
-			_ptr->AddRef();
-		return _ptr;
-	}
-
-	//!
-	template<class T> void Release(T* _ptr)
-	{
-		if (_ptr)
-			_ptr->Release();
-	}
-
-	enum _NoAddRef { NoAddRef };
-
-	template <class T> class SharedPtr
-	{
-	public:
-		//!
-		SharedPtr(void) = default;
-		//!
-		SharedPtr(const T* _ptr) : m_ptr(AddRef(const_cast<T*>(_ptr))) { }
-		//!
-		SharedPtr(const T* _ptr, _NoAddRef) : m_ptr(const_cast<T*>(_ptr)) { }
-		//!
-		SharedPtr(const SharedPtr& _ptr) : m_ptr(AddRef(const_cast<T*>(_ptr.m_ptr))) { }
-		//!
-		SharedPtr(SharedPtr&& _ptr) : m_ptr(_ptr.m_ptr) { _ptr.m_ptr = nullptr; }
-		//!
-		~SharedPtr(void) { Release(m_ptr); }
-
-		//!
-		SharedPtr& operator = (const T* _ptr) { AddRef(const_cast<T*>(_ptr)); Release(m_ptr); m_ptr = const_cast<T*>(_ptr); return *this; }
-		//!
-		SharedPtr& operator = (const SharedPtr& _ptr) { AddRef(const_cast<T*>(_ptr.m_ptr)); Release(m_ptr); m_ptr = const_cast<T*>(_ptr.m_ptr); return *this; }
-		//!
-		SharedPtr& operator = (SharedPtr&& _ptr) { Release(m_ptr); m_ptr = _ptr.m_ptr; _ptr.m_ptr = nullptr; return *this; }
-
-		//!
-		T* operator -> (void) const { ASSERT(m_ptr != nullptr, "nullptr"); return const_cast<T*>(m_ptr); }
-		//!
-		T& operator * (void) const { ASSERT(m_ptr != nullptr, "nullptr"); return *const_cast<T*>(m_ptr); }
-		//!
-		operator T* (void) const { return const_cast<T*>(m_ptr); }
-		//!
-		T* Get(void) const { return const_cast<T*>(m_ptr); }
-
-		//!
-		template<class X> X* Cast(void) const { return static_cast<X*>(const_cast<T*>(m_ptr)); }
-		//!
-		template<class X> X* DynamicCast(void) const { return dynamic_cast<X*>(const_cast<T*>(m_ptr)); }
-
-
-	private:
-		T* m_ptr = nullptr;
-	};
-
-	template <class T> class WeakRef
-	{
-	public:
-		WeakRef(const T* _ptr)
-		{
-			m_obj = const_cast<T*>(_ptr);
-			if (m_obj)
-			{
-				m_ref = m_obj->_GetWeakRef();
-			}
-		}
-
-		SharedPtr<T> Lock(void)
-		{
-			if(m_ref)
-		}
-
-	private:
-		void _AddRef(T* _obj)
-		{
-			m_obj = _obj;
-			m_ref = _obj->
-		}
-		void _Release(void)
-		{
-			if (m_ref)
-			{
-				m_ref = nullptr;
-				m_obj = nullptr;
-			}
-		}
-		T* m_obj = nullptr;
-		int* m_ref = nullptr;
-	};
-
 
 	//template <class T> struct _StdIteratorTag;
 //	template <class T> struct _StdIteratorTag<std::random_access_iterator_tag> { static const ArrayIteratorType Type = ArrayIteratorType::ID; };
@@ -492,12 +320,16 @@ void main()
 	auto rsb = rs.Begin();
 	auto rse = rs.End();
 
-	//StdContainerBenchmark();
-	//printf("\n");
-	//MyContainerBenchmark();
-	//printf("\n");
-	//StdContainerBenchmark();
+	StdContainerBenchmark();
+	printf("\n");
+	MyContainerBenchmark();
+	printf("\n");
+	StdContainerBenchmark();
 
+	std::shared_ptr<int> ssp = std::make_shared<int>(0);
+	std::weak_ptr<int> swp = ssp;
+	std::shared_ptr<int> ssp2 = swp.lock();
+	//ssp.use_count();
 	system("pause");
 }
 

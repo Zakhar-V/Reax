@@ -1,8 +1,8 @@
 #pragma once
 
-#include "Core.hpp"
+#include "Common.hpp"
 
 namespace Reax
 {
-	
+
 }
