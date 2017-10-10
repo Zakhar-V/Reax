@@ -12,7 +12,7 @@ namespace Reax
 	//----------------------------------------------------------------------------//
 
 	//! Multibyte string.
-	class String
+	class RX_API String
 	{
 	public:
 		//!

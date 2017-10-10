@@ -26,7 +26,7 @@ namespace Reax
 		HashMap<uint, Attribute> attributes;
 	};
 
-	class Object : public RefCounted
+	class RX_API Object : public RefCounted
 	{
 	public:
 
@@ -35,7 +35,7 @@ namespace Reax
 
 #define gReflection ReflectionSystem::Instance
 
-	class ReflectionSystem : public Singleton<ReflectionSystem>
+	class RX_API ReflectionSystem : public Singleton<ReflectionSystem>
 	{
 
 	};

@@ -144,8 +144,10 @@ namespace Reax
 	class NonCopyable
 	{
 	public:
-		NonCopyable(void) { }
-		~NonCopyable(void) { }
+		//!
+		NonCopyable(void) = default;
+		//!
+		~NonCopyable(void) = default;
 
 	private:
 		NonCopyable(const NonCopyable&) = delete;

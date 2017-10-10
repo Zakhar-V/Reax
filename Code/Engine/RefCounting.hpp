@@ -12,12 +12,12 @@ namespace Reax
 	//----------------------------------------------------------------------------//
 
 	//!
-	class RefCounted : public NonCopyable
+	class RX_API RefCounted : public NonCopyable
 	{
 	public:
 
 		//!
-		class WeakReference final : public NonCopyable
+		class RX_API WeakReference final : public NonCopyable
 		{
 		public:
 			friend class RefCounted;
@@ -57,7 +57,7 @@ namespace Reax
 		};
 
 		//!
-		RefCounted(void) { }
+		RefCounted(void) = default;
 		//!
 		~RefCounted(void)
 		{
